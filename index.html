@@ -1,0 +1,495 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>말로 부르는 버스 데모</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: two panels side by side — the phone call on the left, the operator queue on the right; stacks on phones */
+:root {
+  --bg: #f3f5f1; --surface: #ffffff; --fg: #1d2420; --muted: #5b665f; --line: #d6ddd7;
+  --accent: #1f6b45; --accent-soft: #e2efe6; --on-accent: #ffffff;
+  --red: #b4372f; --red-soft: #f7e3e1; --yellow: #9a6b00; --yellow-soft: #f8eccc; --green: #1f6b45; --green-soft: #e2efe6;
+  --font-display: "Do Hyeon", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121714; --surface: #1a211d; --fg: #e6ece8; --muted: #9eaaa2; --line: #2c3631;
+    --accent: #5cc48c; --accent-soft: #1f3529; --on-accent: #0d1410;
+    --red: #f08a80; --red-soft: #3a2220; --yellow: #e8bf5a; --yellow-soft: #352c14; --green: #5cc48c; --green-soft: #1f3529;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121714; --surface: #1a211d; --fg: #e6ece8; --muted: #9eaaa2; --line: #2c3631;
+  --accent: #5cc48c; --accent-soft: #1f3529; --on-accent: #0d1410;
+  --red: #f08a80; --red-soft: #3a2220; --yellow: #e8bf5a; --yellow-soft: #352c14; --green: #5cc48c; --green-soft: #1f3529;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(30px, 6vw, 42px); line-height: 1.1; margin: 0; }
+.lead { margin: 0; color: var(--muted); max-width: 70ch; }
+.grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+@media (min-width: 880px) { .grid { grid-template-columns: 1.05fr 1fr; align-items: start; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel h2 { font-size: 13px; letter-spacing: .06em; color: var(--muted); margin: 0; font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.mode { font-size: 12px; color: var(--muted); }
+.mode b { color: var(--fg); font-weight: 600; }
+
+#log { display: flex; flex-direction: column; gap: 8px; min-height: 280px; max-height: 440px; overflow-y: auto; padding-right: 4px; }
+.msg { max-width: 85%; padding: 8px 12px; border-radius: 12px; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; }
+.msg.ai { background: var(--accent-soft); align-self: flex-start; border-top-left-radius: 4px; }
+.msg.user { background: var(--bg); border: 1px solid var(--line); align-self: flex-end; border-top-right-radius: 4px; }
+.msg.sys { align-self: center; font-size: 12px; color: var(--muted); background: none; padding: 2px; }
+.who { display: block; font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+
+.card-now { border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px; display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 14px; }
+.card-now dt { color: var(--muted); }
+.card-now dd { margin: 0; font-weight: 500; }
+.card-now .empty { color: var(--muted); font-weight: 400; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-btn { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.chip-btn:hover { border-color: var(--accent); }
+form#say { display: flex; gap: 8px; }
+#utter { flex: 1; min-width: 0; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+button.primary { font: inherit; font-weight: 600; background: var(--accent); color: var(--on-accent); border: 0; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+button.ghost { font: inherit; font-size: 13px; background: none; border: 1px solid var(--line); color: var(--fg); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, .chip-btn:focus-visible, #utter:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+label.toggle { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+
+.counts { display: flex; gap: 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+.dot.red { background: var(--red); } .dot.yellow { background: var(--yellow); } .dot.green { background: var(--green); }
+#queue { display: flex; flex-direction: column; gap: 10px; }
+.qcard { border: 1px solid var(--line); border-left-width: 4px; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.qcard.red { border-left-color: var(--red); } .qcard.yellow { border-left-color: var(--yellow); } .qcard.green { border-left-color: var(--green); }
+.qcard.closed { opacity: .55; }
+.qhead { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: space-between; }
+.pill { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+.pill.red { background: var(--red-soft); color: var(--red); } .pill.yellow { background: var(--yellow-soft); color: var(--yellow); } .pill.green { background: var(--green-soft); color: var(--green); }
+.pill.ex { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.qsum { font-weight: 500; }
+.flag { font-size: 12px; color: var(--muted); }
+.flag::before { content: "· "; }
+details summary { font-size: 13px; color: var(--muted); cursor: pointer; }
+details ol { margin: 6px 0 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+.qact { display: flex; flex-wrap: wrap; gap: 6px; }
+.edit { display: grid; grid-template-columns: auto 1fr; gap: 6px 8px; align-items: center; font-size: 13px; }
+.edit select, .edit input { font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); min-width: 0; }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+.mono { font-family: var(--font-mono); font-size: 12px; }
+@media (prefers-reduced-motion: no-preference) { .qcard { transition: opacity .2s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>말로 부르는 버스</h1>
+    <p class="lead">어르신이 전화로 평소처럼 말하면 AI가 예약 내용을 정리하고, 상담원은 확인이 필요한 건만 봅니다. 왼쪽에서 어르신 역할로 말해 보세요.</p>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="call-h">
+      <div class="row">
+        <h2 id="call-h">통화 화면 · 어르신 쪽</h2>
+        <span class="mode" id="mode">이해 방식: <b>확인 중…</b></span>
+      </div>
+      <div id="log" aria-live="polite"></div>
+
+      <dl class="card-now" aria-label="지금까지 정리된 예약">
+        <dt>출발</dt><dd id="n-from"></dd>
+        <dt>도착</dt><dd id="n-to"></dd>
+        <dt>시간</dt><dd id="n-time"></dd>
+        <dt>인원</dt><dd id="n-people"></dd>
+      </dl>
+
+      <div class="chips" id="examples" aria-label="예시 발화"></div>
+      <form id="say">
+        <input id="utter" autocomplete="off" placeholder="어르신이 하는 말을 입력하세요" aria-label="어르신의 말">
+        <button class="primary" id="send" type="submit">말하기</button>
+      </form>
+      <div class="row">
+        <label class="toggle"><input type="checkbox" id="tts" checked> AI 말을 소리로 읽기</label>
+        <label class="toggle"><input type="checkbox" id="useClaude" checked> Claude로 이해하기</label>
+        <button class="ghost" id="restart" type="button">새 전화 받기</button>
+      </div>
+      <p class="note">이 화면에서는 마이크를 쓸 수 없어 글자로 입력해요. 실제 서비스는 전화 음성을 받아요. 정류소는 시연용 예시예요.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="q-h">
+      <div class="row">
+        <h2 id="q-h">상담원 화면 · 예약 대기열</h2>
+        <div class="counts" id="counts"></div>
+      </div>
+      <div id="queue"></div>
+      <p class="note">빨강은 상담원이 직접 통화, 노랑은 AI가 추정한 부분 확인, 초록은 그대로 승인하면 되는 건이에요.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+const STOPS = [
+  { id: 'S01', name: '방림리 마을회관', alias: ['방림리 회관', '방림 회관', '회관', '마을회관'] },
+  { id: 'S02', name: '계촌리 마을회관', alias: ['계촌리 회관', '계촌 회관', '회관', '마을회관'] },
+  { id: 'S03', name: '방림 보건지소', alias: ['보건지소', '보건소', '보건'] },
+  { id: 'S04', name: '방림 농협 하나로마트', alias: ['하나로마트', '하나로', '농협', '마트'] },
+  { id: 'S05', name: '방림면 행정복지센터', alias: ['행정복지센터', '면사무소', '면사무'] },
+  { id: 'S06', name: '계촌리 경로당', alias: ['경로당'] },
+  { id: 'S07', name: '평창 시외버스터미널', alias: ['시외버스터미널', '터미널', '읍내'] },
+];
+const LOW_ALIASES = new Set(['읍내', '마트', '보건']); // 뜻이 넓어 추정이 들어가는 말
+const byId = Object.fromEntries(STOPS.map(s => [s.id, s]));
+const aliasMap = new Map();
+for (const s of STOPS) for (const a of [s.name, ...s.alias]) {
+  if (!aliasMap.has(a)) aliasMap.set(a, new Set());
+  aliasMap.get(a).add(s.id);
+}
+const ALIASES = [...aliasMap.keys()].sort((a, b) => b.length - a.length);
+
+const EXAMPLES = [
+  '내일 아침 아홉 시에 회관 앞에서 보건소 가요',
+  '방림리요',
+  '농협 갈라고',
+  '세 시',
+  '읍내 터미널까지 두 명',
+  '네',
+  '아니',
+  '상담원 바꿔줘',
+];
+
+const $ = s => document.querySelector(s);
+let sample = null;
+let call, queue = [];
+let seq = 0;
+
+/* ---------- 이해: 규칙 기반 (데모 모드) ---------- */
+const KNUM = [['열두', 12], ['열한', 11], ['다섯', 5], ['여섯', 6], ['일곱', 7], ['여덟', 8], ['아홉', 9], ['한', 1], ['두', 2], ['세', 3], ['네', 4], ['열', 10]];
+const knum = w => /^\d+$/.test(w) ? Number(w) : (KNUM.find(([k]) => k === w) || [, null])[1];
+const NUMWORD = '(\\d{1,2}|열두|열한|다섯|여섯|일곱|여덟|아홉|한|두|세|네|열)';
+
+function localUnderstand(text) {
+  const r = { from: [], to: [], place: [], placeLow: false, date: null, time: null, timeGuessed: false, people: null, mobilityAid: false, wantsAgent: false, confirm: null };
+  const t = text.trim();
+  if (/상담원|사람\s*(바꿔|좀|이랑)|직원/.test(t)) r.wantsAgent = true;
+  if (/^(네|예|응|어|맞아요?|맞어|그래요?|좋아요?)[\s.!요]*$/.test(t)) r.confirm = 'yes';
+  if (/^(아니|아녀|틀려|틀렸)/.test(t)) r.confirm = 'no';
+  if (/휠체어|유모차|보행기/.test(t)) r.mobilityAid = true;
+  if (/내일/.test(t)) r.date = '내일'; else if (/모레/.test(t)) r.date = '모레'; else if (/오늘/.test(t)) r.date = '오늘';
+
+  // 장소: 긴 말부터 찾고, 찾은 자리는 지워서 겹치지 않게
+  let masked = t;
+  const high = new Set(), low = new Set();
+  for (const a of ALIASES) {
+    let i = masked.indexOf(a);
+    while (i !== -1) {
+      const after = masked.slice(i + a.length, i + a.length + 6);
+      const ids = [...aliasMap.get(a)];
+      for (const id of ids) (LOW_ALIASES.has(a) ? low : high).add(id);
+      if (/^\s*(앞|옆)?\s*에서/.test(after)) r.from.push(...ids);
+      else if (/^\s*(앞|옆)?\s*(까지|으로|로|에\s*가|가|갈)/.test(after)) r.to.push(...ids);
+      else r.place.push(...ids);
+      masked = masked.slice(0, i) + ' '.repeat(a.length) + masked.slice(i + a.length);
+      i = masked.indexOf(a);
+    }
+  }
+  r.placeLow = [...low].some(id => !high.has(id)); // "읍내 터미널"처럼 정확한 말도 함께 했으면 추정 아님
+  // "방림리요", "계촌이요"처럼 마을 이름만 말한 경우: 그 마을의 회관 후보로
+  if (!r.from.length && !r.to.length && !r.place.length) {
+    for (const s of STOPS) { const head = s.name.split(' ')[0].replace(/리$/, ''); if (head.length >= 2 && t.includes(head)) r.place.push(s.id); }
+  }
+
+  const tm = t.match(new RegExp('(오전|오후|아침|저녁|낮|밤)?\\s*' + NUMWORD + '\\s*시\\s*(반|(\\d{1,2})\\s*분)?'));
+  if (tm) {
+    let h = knum(tm[2]); const m = tm[3] === '반' ? 30 : (tm[4] ? Number(tm[4]) : 0);
+    const part = tm[1];
+    if (part === '오후' || part === '저녁' || part === '밤' || part === '낮') { if (h < 12) h += 12; }
+    else if (!part) { if (h >= 1 && h <= 6) { h += 12; r.timeGuessed = true; } }
+    if (h !== null && h >= 0 && h <= 23) r.time = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  }
+  const pm = t.match(new RegExp(NUMWORD + '\\s*(명|사람)')) || t.match(/(둘|셋|넷)이/);
+  if (pm) r.people = { 둘: 2, 셋: 3, 넷: 4 }[pm[1]] || knum(pm[1]);
+  return r;
+}
+
+/* ---------- 이해: Claude ---------- */
+function claudePrompt(text) {
+  const stops = STOPS.map(s => `${s.id}: ${s.name} / ${s.alias.join(', ')}`).join('\n');
+  const known = { 출발: call.from && byId[call.from].name, 도착: call.to && byId[call.to].name, 날짜: call.date, 시간: call.time, 인원: call.people };
+  return `너는 농촌 수요응답형 버스(DRT) 전화 예약에서 어르신의 말 한 마디를 예약 정보로 바꾸는 이해 모듈이다. JSON 하나만 출력한다.
+
+정류소 목록 (id: 정식 이름 / 주민들이 부르는 말):
+${stops}
+
+시스템이 방금 물어본 것: ${call.confirming ? '예약 내용이 맞는지 확인' : (call.pending ? '두 정류소 중 어느 쪽인지: ' + call.pending.ids.map(id => byId[id].name).join(' 또는 ') : ({ from: '어디서 타는지', to: '어디까지 가는지', time: '몇 시에 타는지' }[call.asking] || '어디서 어디로 언제 가는지'))}
+지금까지 정리된 정보: ${JSON.stringify(known)}
+어르신의 말: "${text}"
+
+규칙:
+- 정류소는 반드시 위 목록의 id로만 답한다. 목록에 없는 곳은 절대 지어내지 않는다.
+- 한 말이 여러 정류소에 해당할 수 있으면(예: "회관") 후보 id를 모두 넣는다. 모르면 빈 배열.
+- "에서"가 붙으면 출발(from), "까지/로/가" 등 가는 곳이면 도착(to), 구분이 안 되면 place.
+- 뜻이 넓은 말로 추정했으면 placeLow를 true로.
+- 시간은 24시간 "HH:MM". 오전/오후를 말하지 않아 추정했으면 timeGuessed를 true로.
+- 상담원이나 사람을 찾으면 wantsAgent true. 확인 질문에 긍정이면 confirm "yes", 부정이면 "no".
+
+출력 형식 예:
+{"from":["S01"],"to":[],"place":[],"placeLow":false,"date":"내일","time":"09:00","timeGuessed":false,"people":null,"mobilityAid":false,"wantsAgent":false,"confirm":null}`;
+}
+
+function normalize(x) {
+  const ids = a => Array.isArray(a) ? a.map(String).filter(id => byId[id]) : [];
+  const date = ['오늘', '내일', '모레'].includes(x?.date) ? x.date : null;
+  const time = typeof x?.time === 'string' && /^\d{2}:\d{2}$/.test(x.time) ? x.time : null;
+  const people = Number.isInteger(x?.people) && x.people > 0 && x.people < 20 ? x.people : null;
+  return { from: ids(x?.from), to: ids(x?.to), place: ids(x?.place), placeLow: !!x?.placeLow, date, time, timeGuessed: !!x?.timeGuessed, people, mobilityAid: !!x?.mobilityAid, wantsAgent: !!x?.wantsAgent, confirm: x?.confirm === 'yes' || x?.confirm === 'no' ? x.confirm : null };
+}
+
+async function understand(text) {
+  if (sample && $('#useClaude').checked) {
+    try {
+      const out = await sample.json(claudePrompt(text), { modelTier: 'quick', cache: false });
+      return normalize(out);
+    } catch (e) {
+      if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'].includes(e?.code)) {
+        sample = null; setMode();
+        sys('Claude를 쓸 수 없어 데모 모드(규칙 기반)로 바꿨어요.');
+      } else {
+        sys('Claude 응답을 받지 못해 이번 말은 데모 모드로 이해했어요.');
+      }
+    }
+  }
+  return localUnderstand(text);
+}
+
+/* ---------- 통화 흐름 ---------- */
+function newCall() {
+  return { from: null, to: null, date: '오늘', time: null, people: 1, aid: false, flags: [], fails: 0, asking: 'route', pending: null, confirming: false, transcript: [], done: false };
+}
+const fmtTime = t => { if (!t) return ''; const [h, m] = t.split(':').map(Number); const ap = h < 12 ? '오전' : '오후'; const hh = h % 12 || 12; return `${ap} ${hh}시${m ? ' ' + m + '분' : ''}`; };
+const flag = f => { if (!call.flags.includes(f)) call.flags.push(f); };
+
+function assign(slot, ids, low) {
+  const uniq = [...new Set(ids)];
+  if (!uniq.length) return false;
+  if (uniq.length === 1) { call[slot] = uniq[0]; if (low) flag(`"${byId[uniq[0]].name}"는 넓은 표현에서 추정`); return true; }
+  if (!call.pending) call.pending = { slot, ids: uniq }; // 한 번에 하나씩만 되묻기
+  return true;
+}
+
+function apply(r) {
+  if (r.wantsAgent) return 'agent';
+  if (call.confirming) {
+    if (r.confirm === 'yes') return 'yes';
+    if (r.confirm === 'no') { call.from = call.to = call.time = null; call.confirming = false; flag('이용자가 처음 내용을 정정함'); return 'redo'; }
+  }
+  let got = false, answered = false;
+  if (call.pending) {
+    const all = [...r.from, ...r.to, ...r.place].filter(id => call.pending.ids.includes(id));
+    const pick = [...new Set(all)];
+    if (pick.length === 1) { call[call.pending.slot] = pick[0]; flag('같은 이름의 정류소 중 되물어서 선택'); call.pending = null; got = answered = true; }
+  }
+  if (!call.pending && !answered) {
+    if (r.from.length) got = assign('from', r.from, r.placeLow) || got;
+    if (r.to.length) got = assign('to', r.to, r.placeLow) || got;
+    if (!call.pending && r.place.length) {
+      const slot = !call.from && call.asking !== 'to' ? 'from' : 'to';
+      if (!(slot === 'from' && call.from) && !(slot === 'to' && call.to)) got = assign(slot, r.place, r.placeLow) || got;
+    }
+  }
+  if (r.date && r.date !== call.date) { call.date = r.date; got = true; }
+  if (r.time) { call.time = r.time; if (r.timeGuessed) flag(`오전·오후를 말하지 않아 ${fmtTime(r.time)}로 추정`); got = true; }
+  if (r.people) { call.people = r.people; got = true; }
+  if (r.mobilityAid) { call.aid = true; flag('휠체어·보행 보조기기 이용'); got = true; }
+  if (got && call.confirming) call.confirming = false; // 확인 중에 새 내용을 말하면 다시 정리해서 확인
+  if (!got) call.fails++; else call.fails = 0;
+  return 'ok';
+}
+
+function nextTurn(result) {
+  if (result === 'agent') return escalate('이용자가 상담원 연결을 요청');
+  if (result === 'yes') return finish();
+  if (result === 'redo') { call.asking = 'from'; return say('죄송해요. 다시 여쭐게요. 어디서 타실 거예요?'); }
+  if (call.fails >= 2) return escalate('두 번 연속 내용을 이해하지 못함');
+  const sorry = call.fails === 1 ? '죄송해요, 잘 못 알아들었어요. ' : '';
+  if (call.pending) {
+    const names = call.pending.ids.map(id => byId[id].name);
+    return say(`${sorry}${call.pending.slot === 'from' ? '타시는' : '가시는'} 곳이 ${names.slice(0, -1).join(', ')}이에요, ${names.at(-1)}이에요?`);
+  }
+  if (!call.from) { call.asking = 'from'; return say(`${sorry}어디서 타실 거예요? "회관 앞"처럼 말씀하셔도 돼요.`); }
+  if (!call.to) { call.asking = 'to'; return say(`${sorry}어디까지 가세요?`); }
+  if (!call.time) { call.asking = 'time'; return say(`${sorry}몇 시쯤 타실 거예요?`); }
+  call.confirming = true;
+  say(`${call.date} ${fmtTime(call.time)}, ${byId[call.from].name}에서 타서 ${byId[call.to].name}까지, ${call.people}명 맞으세요? 맞으면 "네", 틀리면 "아니"라고 해 주세요.`);
+}
+
+function finish() {
+  pushQueue(call.flags.length ? 'yellow' : 'green', null);
+  say('예약 요청을 넣었어요. 상담원이 확인하면 확정돼요. 전화 끊으셔도 돼요.');
+  endCall();
+}
+function escalate(reason) {
+  flag(reason);
+  pushQueue('red', reason);
+  say('상담원에게 연결해 드릴게요. 잠시만 기다려 주세요.');
+  endCall();
+}
+function endCall() { call.done = true; sys('통화가 끝났어요. "새 전화 받기"로 다시 해 보세요.'); $('#utter').disabled = $('#send').disabled = true; }
+
+/* ---------- 화면 ---------- */
+function addMsg(role, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;
+  if (role !== 'sys') { const w = document.createElement('span'); w.className = 'who'; w.textContent = role === 'ai' ? 'AI' : '어르신'; d.append(w); }
+  d.append(document.createTextNode(text));
+  $('#log').append(d);
+  $('#log').scrollTop = $('#log').scrollHeight;
+  if (role !== 'sys') call.transcript.push([role, text]);
+}
+const sys = t => addMsg('sys', t);
+function say(text) {
+  addMsg('ai', text);
+  if ($('#tts').checked) {
+    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = 'ko-KR'; u.rate = 0.9; speechSynthesis.speak(u); } catch (e) { /* 소리 없이 진행 */ }
+  }
+  renderNow();
+}
+function renderNow() {
+  const set = (id, v) => { const el = $(id); el.textContent = v || '아직 없음'; el.className = v ? '' : 'empty'; };
+  set('#n-from', call.from && byId[call.from].name);
+  set('#n-to', call.to && byId[call.to].name);
+  set('#n-time', call.time && `${call.date} ${fmtTime(call.time)}`);
+  set('#n-people', call.people + '명' + (call.aid ? ' · 보조기기' : ''));
+}
+function setMode() {
+  const on = sample && $('#useClaude').checked;
+  $('#mode').innerHTML = '';
+  $('#mode').append('이해 방식: ');
+  const b = document.createElement('b'); b.textContent = on ? 'Claude' : '데모 모드(규칙 기반)'; $('#mode').append(b);
+  $('#useClaude').disabled = !sample;
+}
+
+const COLOR_LABEL = { red: '상담원 직접 통화', yellow: '추정 부분 확인', green: '그대로 승인 가능' };
+const ORDER = { red: 0, yellow: 1, green: 2 };
+function pushQueue(color, reason, seed) {
+  const c = seed || call;
+  queue.push({ id: ++seq, color, reason, example: !!seed?.example, from: c.from, to: c.to, date: c.date, time: c.time, people: c.people, flags: [...c.flags], transcript: [...c.transcript], status: '대기', editing: false });
+  renderQueue();
+}
+function summary(q) {
+  const parts = [];
+  parts.push(q.from ? byId[q.from].name : '출발 미정');
+  parts.push('→');
+  parts.push(q.to ? byId[q.to].name : '도착 미정');
+  return parts.join(' ') + (q.time ? ` · ${q.date} ${fmtTime(q.time)}` : '') + ` · ${q.people}명`;
+}
+function renderQueue() {
+  const open = queue.filter(q => q.status === '대기');
+  const cnt = c => open.filter(q => q.color === c).length;
+  $('#counts').innerHTML = '';
+  for (const c of ['red', 'yellow', 'green']) { const s = document.createElement('span'); const d = document.createElement('span'); d.className = 'dot ' + c; s.append(d, String(cnt(c))); s.title = COLOR_LABEL[c]; $('#counts').append(s); }
+
+  const list = [...queue].sort((a, b) => (a.status === '대기' ? 0 : 1) - (b.status === '대기' ? 0 : 1) || ORDER[a.color] - ORDER[b.color] || b.id - a.id);
+  const root = $('#queue'); root.innerHTML = '';
+  if (!list.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = '아직 들어온 예약이 없어요.'; root.append(p); return; }
+  for (const q of list) {
+    const card = document.createElement('article');
+    card.className = `qcard ${q.color}${q.status !== '대기' ? ' closed' : ''}`;
+    const head = document.createElement('div'); head.className = 'qhead';
+    const left = document.createElement('div'); left.className = 'chips';
+    const pill = document.createElement('span'); pill.className = 'pill ' + q.color; pill.textContent = q.status === '대기' ? COLOR_LABEL[q.color] : q.status; left.append(pill);
+    if (q.example) { const ex = document.createElement('span'); ex.className = 'pill ex'; ex.textContent = '예시'; left.append(ex); }
+    const no = document.createElement('span'); no.className = 'mono'; no.textContent = '#' + String(q.id).padStart(3, '0');
+    head.append(left, no);
+    const sum = document.createElement('div'); sum.className = 'qsum'; sum.textContent = summary(q);
+    card.append(head, sum);
+    for (const f of q.flags) { const fl = document.createElement('div'); fl.className = 'flag'; fl.textContent = f; card.append(fl); }
+
+    const det = document.createElement('details'); const s = document.createElement('summary'); s.textContent = '통화 내용 보기'; det.append(s);
+    const ol = document.createElement('ol'); for (const [r, t] of q.transcript) { const li = document.createElement('li'); li.textContent = (r === 'ai' ? 'AI: ' : '어르신: ') + t; ol.append(li); } det.append(ol);
+    card.append(det);
+
+    if (q.editing) card.append(editForm(q));
+    if (q.status === '대기') {
+      const act = document.createElement('div'); act.className = 'qact';
+      const ok = button(q.color === 'red' ? '통화 후 확정' : '승인', 'primary', () => { if (!q.from || !q.to || !q.time) { q.editing = true; renderQueue(); return; } q.status = '확정'; q.editing = false; renderQueue(); });
+      const ed = button(q.editing ? '수정 닫기' : '수정', 'ghost', () => { q.editing = !q.editing; renderQueue(); });
+      const no2 = button('반려', 'ghost', () => { q.status = '반려'; q.editing = false; renderQueue(); });
+      act.append(ok, ed, no2);
+      card.append(act);
+    }
+    root.append(card);
+  }
+}
+function button(label, cls, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = label; b.addEventListener('click', fn); return b; }
+function editForm(q) {
+  const wrap = document.createElement('div'); wrap.className = 'edit';
+  const sel = (key) => {
+    const s = document.createElement('select'); s.id = `e-${key}-${q.id}`;
+    const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '선택'; s.append(o0);
+    for (const st of STOPS) { const o = document.createElement('option'); o.value = st.id; o.textContent = st.name; if (q[key] === st.id) o.selected = true; s.append(o); }
+    s.addEventListener('change', () => { q[key] = s.value || null; renderQueueKeepEdit(); });
+    return s;
+  };
+  const lab = (t, f) => { const l = document.createElement('label'); l.textContent = t; l.htmlFor = f.id; return l; };
+  const from = sel('from'), to = sel('to');
+  const time = document.createElement('input'); time.type = 'time'; time.id = `e-time-${q.id}`; time.value = q.time || '';
+  time.addEventListener('change', () => { q.time = time.value || null; renderQueueKeepEdit(); });
+  wrap.append(lab('출발', from), from, lab('도착', to), to, lab('시간', time), time);
+  return wrap;
+}
+function renderQueueKeepEdit() { const a = document.activeElement?.id; renderQueue(); if (a) document.getElementById(a)?.focus(); }
+
+/* ---------- 시작 ---------- */
+function startCall() {
+  call = newCall();
+  $('#log').innerHTML = '';
+  $('#utter').disabled = $('#send').disabled = false;
+  say('네, 부르면 오는 버스입니다. 어디서 어디로 가세요?');
+}
+
+let busy = false;
+$('#say').addEventListener('submit', async e => {
+  e.preventDefault();
+  const text = $('#utter').value.trim();
+  if (!text || call.done || busy) return; // 응답을 기다리는 동안 예시 버튼 등으로 겹쳐 보내지 않게
+  busy = true;
+  const thisCall = call;
+  $('#utter').value = '';
+  addMsg('user', text);
+  $('#utter').disabled = $('#send').disabled = true;
+  const thinking = document.createElement('div'); thinking.className = 'msg sys'; thinking.textContent = '알아듣는 중…'; $('#log').append(thinking);
+  const r = await understand(text);
+  thinking.remove();
+  busy = false;
+  if (call !== thisCall) return; // 기다리는 사이 "새 전화 받기"를 눌렀으면 옛 응답은 버림
+  nextTurn(apply(r));
+  if (!call.done) { $('#utter').disabled = $('#send').disabled = false; $('#utter').focus(); }
+});
+for (const ex of EXAMPLES) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'chip-btn'; b.textContent = ex;
+  b.addEventListener('click', () => { if (call.done || busy) return; $('#utter').value = ex; $('#say').requestSubmit(); });
+  $('#examples').append(b);
+}
+$('#restart').addEventListener('click', startCall);
+$('#useClaude').addEventListener('change', setMode);
+
+// 첫 화면에 보이는 예시 두 건
+pushQueue('green', null, { example: true, from: 'S04', to: 'S01', date: '오늘', time: '15:30', people: 2, flags: [], transcript: [['ai', '네, 부르면 오는 버스입니다. 어디서 어디로 가세요?'], ['user', '오늘 세 시 반에 농협에서 방림리 회관 가요, 둘이요'], ['ai', '오늘 오후 3시 30분, 방림 농협 하나로마트에서 타서 방림리 마을회관까지, 2명 맞으세요?'], ['user', '네']] });
+pushQueue('yellow', null, { example: true, from: 'S02', to: 'S07', date: '내일', time: '08:00', people: 1, flags: ['"평창 시외버스터미널"는 넓은 표현에서 추정'], transcript: [['ai', '네, 부르면 오는 버스입니다. 어디서 어디로 가세요?'], ['user', '내일 아침 여덟 시에 계촌리 회관에서 읍내 가'], ['ai', '내일 오전 8시, 계촌리 마을회관에서 타서 평창 시외버스터미널까지, 1명 맞으세요?'], ['user', '응']] });
+startCall();
+setMode();
+(async () => { try { sample = await window.claude?.use?.('sample'); } catch (e) { sample = null; } setMode(); })();
+</script>
