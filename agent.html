@@ -1,0 +1,415 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>말로 부르는 버스 상담원</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: call transcript on the left, the booking form the AI fills on the right, confirmed bookings underneath */
+:root {
+  --bg: #f3f5f1; --surface: #ffffff; --fg: #1d2420; --muted: #5b665f; --line: #d6ddd7;
+  --accent: #1f6b45; --accent-soft: #e2efe6; --on-accent: #ffffff;
+  --warn: #9a6b00; --warn-soft: #f8eccc; --ok: #1f6b45; --ok-soft: #e2efe6;
+  --font-display: "Do Hyeon", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121714; --surface: #1a211d; --fg: #e6ece8; --muted: #9eaaa2; --line: #2c3631;
+    --accent: #5cc48c; --accent-soft: #1f3529; --on-accent: #0d1410;
+    --warn: #e8bf5a; --warn-soft: #352c14; --ok: #5cc48c; --ok-soft: #1f3529; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121714; --surface: #1a211d; --fg: #e6ece8; --muted: #9eaaa2; --line: #2c3631;
+  --accent: #5cc48c; --accent-soft: #1f3529; --on-accent: #0d1410;
+  --warn: #e8bf5a; --warn-soft: #352c14; --ok: #5cc48c; --ok-soft: #1f3529; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.6; margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+h1 { font-family: var(--font-display); font-weight: 400; font-size: clamp(28px, 5vw, 38px); line-height: 1.1; margin: 0; }
+header a { color: var(--accent); font-size: 14px; }
+.lead { margin: 0; color: var(--muted); max-width: 75ch; flex-basis: 100%; }
+.grid { display: grid; grid-template-columns: 1fr; gap: 18px; }
+@media (min-width: 900px) { .grid { grid-template-columns: 1fr 1.1fr; align-items: start; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.panel h2 { font-size: 13px; letter-spacing: .06em; color: var(--muted); margin: 0; font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.timer { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+
+#log { display: flex; flex-direction: column; gap: 6px; min-height: 240px; max-height: 380px; overflow-y: auto; }
+.line { display: grid; grid-template-columns: 48px 1fr; gap: 8px; font-size: 14px; }
+.line .who { color: var(--muted); font-size: 12px; padding-top: 2px; }
+.line.user .text { font-weight: 500; }
+.empty { color: var(--muted); font-size: 13px; }
+
+.controls { display: flex; flex-direction: column; gap: 8px; }
+.scripts { display: flex; flex-wrap: wrap; gap: 6px; }
+form#say { display: flex; gap: 8px; flex-wrap: wrap; }
+#utter { flex: 1 1 200px; min-width: 0; font: inherit; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+.who-pick { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.who-pick label { padding: 8px 10px; font-size: 13px; cursor: pointer; }
+.who-pick input { position: absolute; opacity: 0; pointer-events: none; }
+.who-pick input:checked + span { font-weight: 600; color: var(--accent); }
+.who-pick input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+button { font: inherit; cursor: pointer; border-radius: 8px; }
+button.primary { font-weight: 600; background: var(--accent); color: var(--on-accent); border: 0; padding: 9px 16px; }
+button.ghost { font-size: 13px; background: none; border: 1px solid var(--line); color: var(--fg); padding: 6px 10px; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, #utter:focus-visible, select:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.form { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; align-items: start; }
+.form > label, .form > .lab { font-size: 13px; color: var(--muted); padding-top: 8px; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field select, .field input[type=time], .field input[type=number], .said input {
+  font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); min-width: 0; max-width: 100%;
+}
+.inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.said { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.said input { font-size: 13px; padding: 3px 6px; width: 12em; }
+.tag { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.checks { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 6px; font-size: 14px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#msg { font-size: 13px; color: var(--accent); }
+#msg.err { color: var(--warn); }
+
+#done { display: flex; flex-direction: column; gap: 8px; }
+.done-item { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 4px 12px; justify-content: space-between; font-size: 14px; }
+.done-item .sec { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+.note { font-size: 12px; color: var(--muted); margin: 0; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>상담원 통화 보조</h1>
+    <a href="index.html">상담원이 없을 때: AI 접수 화면 →</a>
+    <p class="lead">어르신과 통화하는 동안 AI가 받아 적고 예약 양식을 채웁니다. 상담원은 "확인 필요" 표시만 어르신께 여쭙고 확정하면 됩니다.</p>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-labelledby="call-h">
+      <div class="row">
+        <h2 id="call-h">통화 내용</h2>
+        <span class="timer" id="timer" title="첫 말부터 확정까지 걸린 시간">00:00</span>
+      </div>
+      <div id="log" aria-live="polite"></div>
+      <div class="controls">
+        <div class="scripts" id="scripts" aria-label="녹음 대본 재생"></div>
+        <form id="say">
+          <span class="who-pick" role="radiogroup" aria-label="말한 사람">
+            <label><input type="radio" name="who" value="user" checked><span>어르신</span></label>
+            <label><input type="radio" name="who" value="agent"><span>상담원</span></label>
+          </span>
+          <input id="utter" autocomplete="off" placeholder="통화 내용을 입력하세요" aria-label="통화 내용">
+          <button class="primary" type="submit">넣기</button>
+          <button class="ghost" type="button" id="mic" hidden>마이크</button>
+        </form>
+        <p class="note" id="mic-note" hidden></p>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="form-h">
+      <div class="row">
+        <h2 id="form-h">예약 양식 · AI가 채움</h2>
+        <button class="ghost" type="button" id="reset">새 통화</button>
+      </div>
+      <div class="form" id="form"></div>
+      <div class="actions">
+        <button class="primary" type="button" id="confirm">확정</button>
+        <span id="msg" role="status" aria-live="polite"></span>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="done-h">
+    <div class="row">
+      <h2 id="done-h">확정된 예약</h2>
+      <span class="note">접수 시간은 비교 실험(AI 보조 있음/없음)에 씁니다</span>
+    </div>
+    <div id="done"><p class="empty">아직 확정한 예약이 없어요.</p></div>
+  </section>
+  <p class="note">정류소는 시연용 예시예요. 상담원이 고른 정류소와 어르신 표현은 별칭으로 저장되어, 다음 통화부터 바로 추천돼요(이 브라우저에만 저장).</p>
+</div>
+
+<script src="engine.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+
+const SCRIPTS = [
+  { name: '같은 이름 회관', lines: [
+    ['user', '여보세요, 버스 좀 부를라고요'],
+    ['agent', '네, 어디서 어디로 가세요?'],
+    ['user', '내일 아침 아홉 시에 회관 앞에서 보건소 가요'],
+    ['agent', '방림리 회관이세요, 계촌리 회관이세요?'],
+    ['user', '방림리요'],
+    ['agent', '내일 오전 아홉 시, 방림리 마을회관에서 보건지소까지 한 분 맞으세요?'],
+    ['user', '응'],
+  ] },
+  { name: '처음 듣는 지명', lines: [
+    ['user', '윗말 정자나무 앞에서 농협 갈라고'],
+    ['agent', '정자나무요? 계촌리 경로당 앞 말씀이세요?'],
+    ['user', '응 거기'],
+    ['agent', '몇 시에 타세요?'],
+    ['user', '열 시'],
+  ] },
+  { name: '휠체어 · 오후 추정', lines: [
+    ['user', '세 시에 경로당에서 읍내 터미널 가요'],
+    ['user', '휠체어 타요'],
+    ['agent', '오후 세 시 맞으세요?'],
+    ['user', '응 오후'],
+  ] },
+  { name: '앞이 잘 안 보여요', lines: [
+    ['user', '앞이 잘 안 보여서 그러는데요, 내일 두 시 반에 면사무소에서 하나로마트 가요'],
+    ['agent', '네, 기사님께 탑승 도와드리라고 전해 둘게요.'],
+  ] },
+];
+
+let form, playing = false, timerId = null, doneList = [];
+
+function emptySlot() { return { id: null, cands: [], said: '', check: false, note: '' }; }
+function newForm() { return { from: emptySlot(), to: emptySlot(), date: '오늘', time: null, timeCheck: false, people: 1, vision: false, wheel: false, started: null, lines: [] }; }
+
+/* ---------- 통화 한 줄을 받아 양식 채우기 ---------- */
+function unknownPhrase(text, marker) {
+  const i = text.indexOf(marker);
+  if (i < 1) return '';
+  const words = text.slice(0, i).replace(/\s*(앞|옆)\s*$/, '').trim().split(/\s+/);
+  return words.slice(-2).join(' ').replace(/^(아침|저녁|오전|오후|내일|오늘|모레|\S*시에?)$/, '');
+}
+
+function setSlot(slot, ids, said, low) {
+  const uniq = [...new Set(ids)];
+  if (!uniq.length) return;
+  form[slot] = {
+    id: uniq.length === 1 ? uniq[0] : null, cands: uniq, said: said || '',
+    check: uniq.length > 1 || low,
+    note: uniq.length > 1 ? `같은 이름 ${uniq.length}곳` : (low ? '넓은 표현에서 추정' : ''),
+  };
+}
+
+function hear(text) {
+  const r = localUnderstand(text);
+  let resolved = false;
+  for (const slot of ['from', 'to']) {
+    const s = form[slot];
+    if (s.cands.length > 1) {
+      const pick = [...new Set([...r.from, ...r.to, ...r.place])].filter(id => s.cands.includes(id));
+      if (pick.length === 1) { s.id = pick[0]; s.check = false; s.note = '어르신이 골라 줌'; resolved = true; }
+    }
+  }
+  if (!resolved) {
+    setSlot('from', r.from, r.said.from, r.placeLow);
+    setSlot('to', r.to, r.said.to, r.placeLow);
+    if (r.place.length) {
+      const free = slot => !form[slot].id && form[slot].cands.length === 0;
+      const slot = free('from') ? 'from' : free('to') ? 'to' : null;
+      if (slot) setSlot(slot, r.place, r.said.place, r.placeLow);
+    }
+    // 목록에 없는 표현: 어르신 말을 남겨 두고 상담원이 고르게
+    if (!r.from.length && /에서/.test(text) && !form.from.id) {
+      const p = unknownPhrase(text, '에서');
+      if (p) form.from = { ...emptySlot(), said: p, check: true, note: '목록에 없는 표현, 정류소를 골라 주세요' };
+    }
+  }
+  if (r.date) form.date = r.date;
+  if (r.time) { form.time = r.time; form.timeCheck = r.timeGuessed; }
+  else if (form.time && form.timeCheck && /오후|저녁|오전|아침/.test(text)) {
+    let [h, m] = form.time.split(':').map(Number);
+    if (/오전|아침/.test(text) && h >= 12) h -= 12;
+    if (/오후|저녁/.test(text) && h < 12) h += 12;
+    form.time = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    form.timeCheck = false;
+  }
+  if (r.people) form.people = r.people;
+  if (r.mobilityAid) form.wheel = true;
+  if (/앞이.{0,6}안\s*보|눈이.{0,6}안\s*보|시각장애/.test(text)) form.vision = true;
+}
+
+function addLine(who, text) {
+  if (!text.trim()) return;
+  if (!form.started) { form.started = Date.now(); startTimer(); }
+  form.lines.push([who, text]);
+  const d = document.createElement('div'); d.className = 'line ' + who;
+  const w = document.createElement('span'); w.className = 'who'; w.textContent = who === 'user' ? '어르신' : '상담원';
+  const t = document.createElement('span'); t.className = 'text'; t.textContent = text;
+  d.append(w, t);
+  $('#log').querySelector('.empty')?.remove();
+  $('#log').append(d); $('#log').scrollTop = $('#log').scrollHeight;
+  if (who === 'user') { hear(text); renderForm(); }
+}
+
+/* ---------- 양식 화면 ---------- */
+function stopSelect(slot) {
+  const s = form[slot];
+  const sel = document.createElement('select'); sel.id = 'f-' + slot;
+  const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '정류소 선택'; sel.append(o0);
+  const ordered = [...s.cands, ...STOPS.map(x => x.id).filter(id => !s.cands.includes(id))];
+  for (const id of ordered) {
+    const o = document.createElement('option'); o.value = id;
+    o.textContent = byId[id].name + (s.cands.length > 1 && s.cands.includes(id) ? ' (후보)' : '');
+    if (s.id === id) o.selected = true;
+    sel.append(o);
+  }
+  sel.addEventListener('change', () => { s.id = sel.value || null; s.check = !s.id; s.note = s.id ? '상담원이 선택' : s.note; renderForm(); });
+  return sel;
+}
+function statusTag(check, note) {
+  const t = document.createElement('span');
+  t.className = 'tag ' + (check ? 'warn' : 'ok');
+  t.textContent = check ? '확인 필요' + (note ? ` · ${note}` : '') : (note || '확인됨');
+  return t;
+}
+function slotField(slot, label) {
+  const s = form[slot];
+  const lab = document.createElement('label'); lab.textContent = label; lab.htmlFor = 'f-' + slot;
+  const f = document.createElement('div'); f.className = 'field';
+  const top = document.createElement('div'); top.className = 'inline';
+  top.append(stopSelect(slot));
+  if (s.id || s.check) top.append(statusTag(s.check, s.note));
+  const said = document.createElement('div'); said.className = 'said';
+  const si = document.createElement('input'); si.id = 'said-' + slot; si.value = s.said; si.placeholder = '예: 윗말 정자나무';
+  si.addEventListener('input', () => { s.said = si.value; });
+  const sl = document.createElement('label'); sl.htmlFor = si.id; sl.textContent = '어르신 표현';
+  said.append(sl, si);
+  f.append(top, said);
+  return [lab, f];
+}
+function renderForm() {
+  const root = $('#form'); const keep = document.activeElement?.id;
+  root.innerHTML = '';
+  root.append(...slotField('from', '출발'), ...slotField('to', '도착'));
+
+  const dl = document.createElement('label'); dl.textContent = '날짜'; dl.htmlFor = 'f-date';
+  const df = document.createElement('div'); df.className = 'field';
+  const dsel = document.createElement('select'); dsel.id = 'f-date';
+  for (const d of ['오늘', '내일', '모레']) { const o = document.createElement('option'); o.value = o.textContent = d; if (form.date === d) o.selected = true; dsel.append(o); }
+  dsel.addEventListener('change', () => { form.date = dsel.value; });
+  df.append(dsel);
+
+  const tl = document.createElement('label'); tl.textContent = '시간'; tl.htmlFor = 'f-time';
+  const tf = document.createElement('div'); tf.className = 'field';
+  const trow = document.createElement('div'); trow.className = 'inline';
+  const ti = document.createElement('input'); ti.type = 'time'; ti.id = 'f-time'; ti.value = form.time || '';
+  ti.addEventListener('change', () => { form.time = ti.value || null; form.timeCheck = false; renderForm(); });
+  trow.append(ti);
+  if (form.time) trow.append(statusTag(form.timeCheck, form.timeCheck ? `오전·오후 추정 (${fmtTime(form.time)})` : fmtTime(form.time)));
+  tf.append(trow);
+
+  const pl = document.createElement('label'); pl.textContent = '인원'; pl.htmlFor = 'f-people';
+  const pf = document.createElement('div'); pf.className = 'field';
+  const pi = document.createElement('input'); pi.type = 'number'; pi.min = 1; pi.max = 15; pi.id = 'f-people'; pi.value = form.people; pi.style.width = '5em';
+  pi.addEventListener('change', () => { form.people = Math.max(1, Number(pi.value) || 1); });
+  pf.append(pi);
+
+  const al = document.createElement('span'); al.className = 'lab'; al.textContent = '탑승 지원';
+  const af = document.createElement('div'); af.className = 'checks';
+  for (const [key, text] of [['vision', '시각장애, 탑승 도움 필요'], ['wheel', '휠체어·보행기']]) {
+    const l = document.createElement('label'); const c = document.createElement('input');
+    c.type = 'checkbox'; c.id = 'f-' + key; c.checked = form[key];
+    c.addEventListener('change', () => { form[key] = c.checked; });
+    l.append(c, ' ' + text); af.append(l);
+  }
+  root.append(dl, df, tl, tf, pl, pf, al, af);
+  if (keep) document.getElementById(keep)?.focus();
+}
+
+/* ---------- 확정, 별칭 저장 ---------- */
+function confirmBooking() {
+  const missing = [!form.from.id && '출발', !form.to.id && '도착', !form.time && '시간'].filter(Boolean);
+  if (missing.length) { say(`${missing.join(', ')}을(를) 채워 주세요.`, true); return; }
+  const learned = [];
+  for (const slot of ['from', 'to']) {
+    const s = form[slot];
+    if (s.said && s.said !== byId[s.id].name && learnAlias(s.said, s.id)) learned.push(`"${s.said}" → ${byId[s.id].name}`);
+  }
+  const sec = form.started ? Math.round((Date.now() - form.started) / 1000) : 0;
+  doneList.unshift({ ...form, sec });
+  renderDone();
+  say('확정했어요.' + (learned.length ? ` 별칭 저장: ${learned.join(', ')}. 다음 통화부터 바로 추천돼요.` : ''));
+  resetCall(false);
+}
+function renderDone() {
+  const root = $('#done'); root.innerHTML = '';
+  if (!doneList.length) { const p = document.createElement('p'); p.className = 'empty'; p.textContent = '아직 확정한 예약이 없어요.'; root.append(p); return; }
+  for (const b of doneList) {
+    const d = document.createElement('div'); d.className = 'done-item';
+    const s = document.createElement('span');
+    const extra = [b.vision && '탑승 도움', b.wheel && '휠체어'].filter(Boolean).join(', ');
+    s.textContent = `${byId[b.from.id].name} → ${byId[b.to.id].name} · ${b.date} ${fmtTime(b.time)} · ${b.people}명${extra ? ' · ' + extra : ''}`;
+    const t = document.createElement('span'); t.className = 'sec'; t.textContent = `접수 ${b.sec}초`;
+    d.append(s, t); root.append(d);
+  }
+}
+function say(text, err) { const m = $('#msg'); m.textContent = text; m.className = err ? 'err' : ''; }
+
+/* ---------- 통화 시작·끝, 타이머 ---------- */
+function startTimer() {
+  clearInterval(timerId);
+  timerId = setInterval(() => {
+    const s = Math.floor((Date.now() - form.started) / 1000);
+    $('#timer').textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }, 500);
+}
+function resetCall(clearMsg = true) {
+  clearInterval(timerId); timerId = null;
+  form = newForm();
+  $('#timer').textContent = '00:00';
+  $('#log').innerHTML = '<p class="empty">대본을 재생하거나 통화 내용을 입력하세요.</p>';
+  if (clearMsg) say('');
+  renderForm();
+}
+
+async function play(script) {
+  if (playing) return;
+  playing = true;
+  resetCall();
+  for (const b of $('#scripts').querySelectorAll('button')) b.disabled = true;
+  const wait = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 200 : 900;
+  for (const [who, text] of script.lines) { addLine(who, text); await new Promise(r => setTimeout(r, wait)); }
+  for (const b of $('#scripts').querySelectorAll('button')) b.disabled = false;
+  playing = false;
+  if (!form.from.id || !form.to.id || !form.time) say('"확인 필요"인 칸을 골라 채운 뒤 확정하세요.', true);
+}
+
+for (const s of SCRIPTS) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost'; b.textContent = '▶ ' + s.name;
+  b.addEventListener('click', () => play(s));
+  $('#scripts').append(b);
+}
+$('#say').addEventListener('submit', e => {
+  e.preventDefault();
+  if (playing) return;
+  addLine(document.querySelector('input[name=who]:checked').value, $('#utter').value);
+  $('#utter').value = '';
+});
+$('#confirm').addEventListener('click', confirmBooking);
+$('#reset').addEventListener('click', () => resetCall());
+
+// 마이크: 크롬에서 스피커폰 통화를 받아 적기 (지원되는 브라우저에서만 보임)
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR) {
+  const mic = $('#mic'); mic.hidden = false;
+  let rec = null;
+  mic.addEventListener('click', () => {
+    if (rec) { rec.stop(); return; }
+    rec = new SR(); rec.lang = 'ko-KR'; rec.continuous = true; rec.interimResults = false;
+    rec.onresult = e => { for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) addLine(document.querySelector('input[name=who]:checked').value, e.results[i][0].transcript); };
+    rec.onerror = e => { const n = $('#mic-note'); n.hidden = false; n.textContent = e.error === 'not-allowed' ? '마이크 권한이 없어요. 주소창의 권한 설정을 확인하거나 글자로 입력하세요.' : '음성 인식이 멈췄어요. 다시 누르거나 글자로 입력하세요.'; };
+    rec.onend = () => { rec = null; mic.textContent = '마이크'; };
+    rec.start(); mic.textContent = '받아쓰는 중 · 멈추기';
+  });
+}
+
+resetCall();
+</script>
