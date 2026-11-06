@@ -1,0 +1,23 @@
+# 비밀 정보: API 키는 .env에만 두고 절대 올리지 않는다
+.env
+.env.*
+!.env.example
+
+# 의존성·빌드 결과
+node_modules/
+__pycache__/
+.venv/
+dist/
+build/
+
+# 실제 통화 음성·개인정보 (공개 금지)
+*.wav
+*.mp3
+*.m4a
+recordings/
+
+# 운영체제·편집기
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
