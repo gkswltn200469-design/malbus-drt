@@ -7,7 +7,8 @@
 
 | 항목 | 규칙 |
 |---|---|
-| Base URL | `{BASE_URL}` (스택 확정 후 기입) |
+| 기술 | Spring Boot, Spring Data JPA, SQLite (`sqlite-jdbc` + Hibernate `SQLiteDialect`) |
+| Base URL | `http://localhost:8080` |
 | 형식 | JSON, UTF-8 |
 | 날짜 / 시간 / 시각 | `YYYY-MM-DD` / `HH:MM` (24h) / ISO 8601 `+09:00` |
 | 담당 | `BE` 백엔드 규칙 · `AI` LLM 호출(곽도윤). 키 없으면 AI 단계는 규칙 모드 |
@@ -104,6 +105,7 @@ type LearnedAlias = {
   firstSeen: string;
   lastSeen: string;
   reservationIds: number[];
+  recommended: boolean;        // count ≥ 2 이고 conflicts 없음 → 승인 추천 표시 (계산값)
 };
 ```
 
@@ -145,6 +147,7 @@ type LearnedAlias = {
 | `INVALID_PEOPLE` | 400 | 인원 1 미만 |
 | `CONFIRM_BLOCKED` | 409 | 확인 필요·빈칸 남음 |
 | `ALREADY_CONFIRMED` | 409 | 확정된 예약 수정·재확정 |
+| `PURPOSE_NOT_SUPPORTED` | 409 | 목적이 예약이 아닌 건을 확정 |
 
 ---
 
@@ -210,6 +213,7 @@ type LearnedAlias = {
 ```
 - 조건(`purpose = RESERVE`): `from` `to` `date` `time` `people` 모두 `value ≠ null` · `needsCheck = false` · 출발≠도착 · 인원≥1 · 접수일 이후
 - `200` Reservation — `status = "CONFIRMED"`, transcript에 `SYSTEM` 기록 줄 추가, DB 저장 (D-6의 JSON 화면은 이 응답을 그대로 표시)
+- 목적이 변경·취소·문의면 `409 PURPOSE_NOT_SUPPORTED`. 분류 결과는 양식에 보여 주되 이번 범위에서는 확정하지 않음 (상담원이 목적을 예약으로 고치면 확정 가능, 아니면 DRAFT로 남김)
 - `409 CONFIRM_BLOCKED` (`details.fields`) · `409 ALREADY_CONFIRMED`
 
 ### 7. `GET /reservations?status=DRAFT|CONFIRMED`
@@ -253,6 +257,8 @@ type LearnedAlias = {
 ### 12. `POST /aliases/{id}/approve` · `POST /aliases/{id}/reject`
 
 `200` LearnedAlias · approve 시 `conflicts`가 있으면 응답에 `"warning": "다른 정류장 선택 기록 있음"` 포함 · `404`
+- 승인·거절은 사람이 한다. 시제품이라 권한 구분 없이 상담원 화면에서 누구나 가능
+- 자동 승인 없음. `recommended = true`(같은 표현으로 같은 정류장을 2번 이상, 다른 정류장 기록 없음)인 건을 목록 위에 "승인 추천"으로 표시
 
 ---
 
@@ -279,11 +285,11 @@ AI는 말·근거·후보 순서만 반환. **정류장 확정과 `needsCheck` �
 
 ---
 
-## 미결
+## 결정 사항 (2026-11-10)
 
-| # | 내용 |
-|---|---|
-| 1 | 목적이 변경·취소·문의일 때 확정 조건 |
-| 2 | "인원 따로 고려 안 함" = 칸 제외인지, 복수 예약 미분리인지 |
-| 3 | 별칭 승인 기준 (횟수, 승인자) |
-| 4 | 기술 스택·포트 |
+| # | 내용 | 결정 |
+|---|---|---|
+| 1 | 목적이 변경·취소·문의일 때 | 분류만 하고 확정은 예약만 가능 (`PURPOSE_NOT_SUPPORTED`) |
+| 2 | "인원 따로 고려 안 함" | 한 통화에 여러 예약으로 나누지 않음. 인원 칸은 유지 |
+| 3 | 별칭 승인 기준 | 사람이 승인. 2번 이상 같은 선택 + 충돌 없음이면 승인 추천 표시 |
+| 4 | 기술 스택 | Spring Boot + JPA + SQLite, 포트 8080 |

@@ -2,6 +2,7 @@
 
 > 작성 강대운(BE) · 2026-11-10 · 초안 · 기준: `docs/api.md`
 > 저장소: **SQLite** (`data/malbus.db`, 서버 시작 시 `schema.sql` + `data/정류장.csv`로 생성. DB 파일은 저장소에 올리지 않음)
+> 구현: Spring Boot + Spring Data JPA (`sqlite-jdbc`, Hibernate `SQLiteDialect`). 운영 때는 설정만 바꿔 MySQL로 옮길 수 있게 JPA 엔티티로 작성
 
 ```mermaid
 erDiagram
@@ -103,7 +104,7 @@ erDiagram
 - **`conflicts`는 저장하지 않음:** `learned_alias`에서 같은 `said`·다른 `stop_id` 행을 조회해 계산한다.
 - **DB로 못 막는 규칙은 BE가 검사:** 출발 ≠ 도착(행이 달라 CHECK 불가), 과거 날짜, 확정 조건, 확정 후 수정 금지.
 - **D-6 JSON 화면:** `GET /reservations/{id}` 응답을 그대로 보여 준다. 파일로 따로 내보내지 않음.
-- **연결마다** `PRAGMA foreign_keys = ON;` 필수 (SQLite는 기본이 꺼짐).
+- **연결마다** `PRAGMA foreign_keys = ON;` 필수 (SQLite는 기본이 꺼짐). Spring에서는 JDBC URL에 `?foreign_keys=on`을 붙여 모든 연결에 적용하고, 구현할 때 FK 위반이 실제로 막히는지 테스트로 확인.
 - **ENUM·BOOLEAN·DATETIME 없음:** CHECK 제약, 0/1 정수, ISO 8601 TEXT로 대신.
 
 ## schema.sql
