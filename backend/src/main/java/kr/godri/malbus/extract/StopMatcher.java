@@ -9,20 +9,24 @@ import java.util.List;
 import java.util.Map;
 
 // 고객이 한 말 -> 정류장 후보. 목록 안에서만 찾음
-// 순서: 이름 -> 별칭 -> 부분 일치 -> 비슷한 글자
+// 순서: 이름 -> 별칭 -> 배운 별칭 -> 부분 일치 -> 비슷한 글자
 public final class StopMatcher {
 
     public record Candidate(String stopId, String matchType, String reason) {
     }
 
-    // decided: 이름·별칭 일치가 딱 1곳일 때만 그 정류장, 아니면 null
+    // decided: 이름·별칭·승인된 배운 별칭 일치가 딱 1곳일 때만 그 정류장, 아니면 null
     public record Result(List<Candidate> candidates, String decided) {
+    }
+
+    // 상담원이 추가한 별칭. 승인 전(PENDING)은 후보 순서만 올림
+    public record Learned(String said, String stopId, boolean approved) {
     }
 
     private StopMatcher() {
     }
 
-    public static Result match(String said, List<StopDto> stops) {
+    public static Result match(String said, List<StopDto> stops, List<Learned> learned) {
         String full = Texts.norm(said);
         String dir = Texts.direction(full);
         String core = Texts.withoutDirection(full);
@@ -43,11 +47,31 @@ public final class StopMatcher {
                 }
             }
         }
+        Map<String, Candidate> pending = new LinkedHashMap<>();
+        for (Learned l : learned) {
+            String k = Texts.key(l.said());
+            if (full.equals(k) || core.equals(Texts.withoutDirection(k))) {
+                Candidate c = new Candidate(l.stopId(), "LEARNED",
+                        "배운 별칭 '" + l.said() + "' 일치" + (l.approved() ? "" : " (승인 전)"));
+                (l.approved() ? strong : pending).putIfAbsent(l.stopId(), c);
+            }
+        }
+
         List<Candidate> exact = narrow(new ArrayList<>(strong.values()), dir, stops);
         if (!exact.isEmpty()) {
-            return new Result(exact, exact.size() == 1 ? exact.get(0).stopId() : null);
+            List<Candidate> out = new ArrayList<>(exact);
+            addNew(out, pending.values());
+            return new Result(out, exact.size() == 1 ? exact.get(0).stopId() : null);
         }
-        return new Result(narrow(weak(core, stops), dir, stops), null);
+        List<Candidate> rest = new ArrayList<>(pending.values());
+        addNew(rest, weak(core, stops));
+        return new Result(narrow(rest, dir, stops), null);
+    }
+
+    private static void addNew(List<Candidate> to, Iterable<Candidate> more) {
+        for (Candidate c : more) {
+            if (to.stream().noneMatch(x -> x.stopId().equals(c.stopId()))) to.add(c);
+        }
     }
 
     // 부분 일치, 비슷한 글자. 둘 다 확인 필요

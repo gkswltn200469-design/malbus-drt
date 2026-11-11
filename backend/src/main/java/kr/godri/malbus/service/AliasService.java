@@ -5,6 +5,7 @@ import kr.godri.malbus.common.Times;
 import kr.godri.malbus.domain.LearnedAlias;
 import kr.godri.malbus.dto.AddAliasRequest;
 import kr.godri.malbus.dto.LearnedAliasDto;
+import kr.godri.malbus.extract.StopMatcher;
 import kr.godri.malbus.extract.Texts;
 import kr.godri.malbus.repository.LearnedAliasRepository;
 import kr.godri.malbus.repository.ReservationRepository;
@@ -86,6 +87,14 @@ public class AliasService {
         LearnedAlias alias = find(id);
         alias.setStatus("REJECTED");
         return toDto(alias, null);
+    }
+
+    // 매칭에 쓸 배운 별칭. 거절된 건 뺌
+    @Transactional(readOnly = true)
+    public List<StopMatcher.Learned> forMatching() {
+        return aliasRepository.findByStatusIn(List.of("PENDING", "APPROVED")).stream()
+                .map(a -> new StopMatcher.Learned(a.getSaid(), a.getStopId(), a.isApproved()))
+                .toList();
     }
 
     private LearnedAlias find(Long id) {
