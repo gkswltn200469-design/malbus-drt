@@ -1,29 +1,40 @@
 package kr.godri.malbus.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import kr.godri.malbus.common.ApiException;
 import kr.godri.malbus.common.Times;
 import kr.godri.malbus.domain.Reservation;
 import kr.godri.malbus.domain.ReservationField;
 import kr.godri.malbus.domain.TranscriptLine;
 import kr.godri.malbus.dto.CreateReservationRequest;
+import kr.godri.malbus.dto.PatchFieldRequest;
+import kr.godri.malbus.dto.PatchFieldResponse;
 import kr.godri.malbus.dto.ReservationDto;
 import kr.godri.malbus.dto.ReservationSummary;
 import kr.godri.malbus.dto.TranscriptLineDto;
 import kr.godri.malbus.repository.ReservationFieldRepository;
 import kr.godri.malbus.repository.ReservationRepository;
 import kr.godri.malbus.repository.TranscriptLineRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 import static java.util.stream.Collectors.toMap;
 
 @Service
 @Transactional
 public class ReservationService {
+
+    private static final Set<String> PURPOSES = Set.of("RESERVE", "CHANGE", "CANCEL", "INQUIRY");
+    private static final Pattern HHMM = Pattern.compile("([01]\\d|2[0-3]):[0-5]\\d");
 
     private final ReservationRepository reservationRepository;
     private final ReservationFieldRepository fieldRepository;
@@ -68,8 +79,78 @@ public class ReservationService {
         }).toList();
     }
 
+    public PatchFieldResponse patchField(Long id, String name, PatchFieldRequest req) {
+        if (!ReservationField.NAMES.contains(name)) {
+            throw ApiException.invalid("없는 칸: " + name);
+        }
+        Reservation r = findDraft(id);
+        Map<String, ReservationField> fields = fields(id);
+        String value = validate(r, fields, name, req == null ? null : req.value());
+        String now = Times.now();
+        fields.get(name).decideByAgent(value, req.note(), now);
+        r.touch(now);
+        return new PatchFieldResponse(toDto(r, fields), null);
+    }
+
+    private String validate(Reservation r, Map<String, ReservationField> fields, String name, JsonNode node) {
+        if (node == null || node.isNull()) {
+            throw ApiException.invalid("value가 비었음");
+        }
+        if (name.equals("people")) {
+            boolean number = node.isIntegralNumber() && node.canConvertToInt();
+            boolean text = node.isTextual() && node.asText().trim().matches("-?\\d{1,9}");
+            if (!number && !text) {
+                throw ApiException.invalid("인원은 정수");
+            }
+            int n = number ? node.asInt() : Integer.parseInt(node.asText().trim());
+            if (n < 1) {
+                throw ApiException.badRequest("INVALID_PEOPLE", "인원은 1명 이상");
+            }
+            return String.valueOf(n);
+        }
+        if (!node.isTextual()) {
+            throw ApiException.invalid(name + " 값은 문자열");
+        }
+        String v = node.asText().trim();
+        switch (name) {
+            case "purpose" -> {
+                if (!PURPOSES.contains(v)) throw ApiException.invalid("목적은 RESERVE, CHANGE, CANCEL, INQUIRY 중 하나");
+            }
+            case "from", "to" -> {
+                if (!stopService.exists(v)) throw ApiException.badRequest("STOP_NOT_FOUND", "목록에 없는 정류장: " + v);
+                String other = fields.get(name.equals("from") ? "to" : "from").value();
+                if (v.equals(other)) throw ApiException.badRequest("SAME_STOP", "출발과 도착이 같음");
+            }
+            case "date" -> {
+                LocalDate d;
+                try {
+                    d = LocalDate.parse(v);
+                } catch (DateTimeParseException e) {
+                    throw ApiException.invalid("날짜 형식은 YYYY-MM-DD");
+                }
+                if (d.isBefore(Times.dateOf(r.getReceivedAt()))) {
+                    throw ApiException.badRequest("PAST_DATE", "접수일 이전 날짜");
+                }
+            }
+            case "time" -> {
+                if (!HHMM.matcher(v).matches()) throw ApiException.invalid("시간 형식은 HH:MM");
+            }
+            default -> {
+            }
+        }
+        return v;
+    }
+
     private Reservation find(Long id) {
         return reservationRepository.findById(id).orElseThrow(() -> ApiException.notFound("예약 없음: " + id));
+    }
+
+    private Reservation findDraft(Long id) {
+        Reservation r = find(id);
+        if (r.isConfirmed()) {
+            throw new ApiException(HttpStatus.CONFLICT, "ALREADY_CONFIRMED", "이미 확정된 예약");
+        }
+        return r;
     }
 
     private Map<String, ReservationField> fields(Long id) {

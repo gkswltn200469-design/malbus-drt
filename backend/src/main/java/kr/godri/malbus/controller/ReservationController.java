@@ -1,11 +1,14 @@
 package kr.godri.malbus.controller;
 
 import kr.godri.malbus.dto.CreateReservationRequest;
+import kr.godri.malbus.dto.PatchFieldRequest;
+import kr.godri.malbus.dto.PatchFieldResponse;
 import kr.godri.malbus.dto.ReservationDto;
 import kr.godri.malbus.dto.ReservationSummary;
 import kr.godri.malbus.service.ReservationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -41,5 +44,11 @@ public class ReservationController {
     @GetMapping("/{id}")
     public ReservationDto get(@PathVariable Long id) {
         return reservationService.get(id);
+    }
+
+    @PatchMapping("/{id}/fields/{name}")
+    public PatchFieldResponse patchField(@PathVariable Long id, @PathVariable String name,
+                                         @RequestBody PatchFieldRequest req) {
+        return reservationService.patchField(id, name, req);
     }
 }
