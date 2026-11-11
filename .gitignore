@@ -21,3 +21,7 @@ recordings/
 Thumbs.db
 .vscode/
 .idea/
+
+# 백엔드: gradle 캐시, 서버가 만드는 sqlite db
+.gradle/
+data/malbus.db*
