@@ -8,6 +8,7 @@ import kr.godri.malbus.domain.ReservationField;
 import kr.godri.malbus.domain.TranscriptLine;
 import kr.godri.malbus.dto.ConfirmRequest;
 import kr.godri.malbus.dto.CreateReservationRequest;
+import kr.godri.malbus.dto.LineRequest;
 import kr.godri.malbus.dto.PatchFieldRequest;
 import kr.godri.malbus.dto.PatchFieldResponse;
 import kr.godri.malbus.dto.ReservationDto;
@@ -41,19 +42,22 @@ public class ReservationService {
     private final ReservationFieldRepository fieldRepository;
     private final TranscriptLineRepository lineRepository;
     private final StopService stopService;
+    private final ExtractionService extractionService;
 
     public ReservationService(ReservationRepository reservationRepository, ReservationFieldRepository fieldRepository,
-                              TranscriptLineRepository lineRepository, StopService stopService) {
+                              TranscriptLineRepository lineRepository, StopService stopService,
+                              ExtractionService extractionService) {
         this.reservationRepository = reservationRepository;
         this.fieldRepository = fieldRepository;
         this.lineRepository = lineRepository;
         this.stopService = stopService;
+        this.extractionService = extractionService;
     }
 
     public ReservationDto create(CreateReservationRequest req) {
         String now = Times.now();
         String receivedAt = req == null || req.receivedAt() == null ? now : Times.format(Times.parse(req.receivedAt()));
-        Reservation r = reservationRepository.save(new Reservation("RULE", receivedAt, now));
+        Reservation r = reservationRepository.save(new Reservation(extractionService.mode(), receivedAt, now));
         fieldRepository.saveAll(ReservationField.NAMES.stream().map(n -> ReservationField.blank(r.getId(), n)).toList());
         return toDto(r, fields(r.getId()));
     }
@@ -78,6 +82,24 @@ public class ReservationService {
                     f.get("to").value(), f.get("date").value(), f.get("time").value(),
                     people == null ? null : Integer.valueOf(people));
         }).toList();
+    }
+
+    // 통화 한 줄 추가 -> 전체 통화로 다시 추출. 확정된 예약은 줄만 추가
+    public ReservationDto addLine(Long id, LineRequest req) {
+        if (req == null) throw ApiException.invalid("speaker, text가 필요함");
+        req.validate();
+        Reservation r = find(id);
+        String now = Times.now();
+        addLine(id, now, req.speaker(), req.text().trim());
+        Map<String, ReservationField> fields = fields(id);
+        if (!r.isConfirmed()) {
+            Map<String, ReservationField> fresh = extractionService.extract(r.getReceivedAt(),
+                    lineRepository.findByReservationIdOrderByLineNo(id));
+            fields.forEach((name, f) -> f.applyExtracted(fresh.get(name)));
+            ExtractionService.checkSameStop(fields.get("from"), fields.get("to"));
+            r.touch(now);
+        }
+        return toDto(r, fields);
     }
 
     public PatchFieldResponse patchField(Long id, String name, PatchFieldRequest req) {
