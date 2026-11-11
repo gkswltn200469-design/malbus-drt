@@ -58,7 +58,7 @@ public class ExtractionService {
         f.put("to", stop("to", ai.to(), lines, stops, learned, src));
         f.put("date", date(ai.date(), Times.dateOf(receivedAt), lines, src));
         f.put("time", time(ai.time(), lines, src));
-        f.put("people", people(ai.people(), f.get("purpose").value(), lines, src));
+        f.put("people", blank("people")); // 인원은 화면·채점 제외, 추출 안 하고 항상 1 (나중 인원 기능용으로 칸만 남김)
         checkSameStop(f.get("from"), f.get("to"));
         return f;
     }
@@ -155,24 +155,6 @@ public class ExtractionService {
         return guess
                 ? blank("time").fill(v, t.said(), true, "AMBIGUOUS", "오전인지 오후인지 여쭤 보세요", no, text, src)
                 : blank("time").fill(v, t.said(), false, null, null, no, text, src);
-    }
-
-    // 예약인데 인원을 말 안 하면 1명. said 없이 RULE로 둬서 고객이 말한 값과 구분 (11/11 결정)
-    private ReservationField people(AiOutput.People p, String purpose, List<TranscriptLine> lines, String src) {
-        if (p == null || (p.said() == null && p.value() == null)) {
-            return "RESERVE".equals(purpose)
-                    ? blank("people").fill("1", null, false, null, null, null, null, "RULE")
-                    : blank("people");
-        }
-        Integer no = p.evidenceLineNo();
-        String text = lineText(lines, no);
-        if (p.value() == null) {
-            return blank("people").fill(null, p.said(), true, "AMBIGUOUS", "몇 분인지 여쭤 보세요", no, text, src);
-        }
-        if (p.value() < 1) {
-            return blank("people").fill(String.valueOf(p.value()), p.said(), true, "INVALID", "인원을 다시 여쭤 보세요", no, text, src);
-        }
-        return blank("people").fill(String.valueOf(p.value()), p.said(), false, null, null, no, text, src);
     }
 
     private static ReservationField blank(String name) {

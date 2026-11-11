@@ -32,8 +32,7 @@ public class ReservationField {
             "from", "어디서 타세요?",
             "to", "어디로 가세요?",
             "date", "언제 타세요?",
-            "time", "몇 시에 타세요?",
-            "people", "몇 분 타세요?");
+            "time", "몇 시에 타세요?");
 
     @Id
     @Column(name = "reservation_id") // 후보 테이블 join에서 이 이름으로 찾음
@@ -72,6 +71,10 @@ public class ReservationField {
         if (name.equals("purpose")) {
             f.value = "RESERVE";
             f.needsCheck = false;
+        } else if (name.equals("people")) { // 인원 고정 1
+            f.value = "1";
+            f.needsCheck = false;
+            f.source = "RULE";
         } else {
             f.reason = "MISSING";
             f.askHint = ASK.get(name);
