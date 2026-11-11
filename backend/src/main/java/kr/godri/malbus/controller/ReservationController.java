@@ -1,5 +1,6 @@
 package kr.godri.malbus.controller;
 
+import kr.godri.malbus.dto.ConfirmRequest;
 import kr.godri.malbus.dto.CreateReservationRequest;
 import kr.godri.malbus.dto.PatchFieldRequest;
 import kr.godri.malbus.dto.PatchFieldResponse;
@@ -50,5 +51,10 @@ public class ReservationController {
     public PatchFieldResponse patchField(@PathVariable Long id, @PathVariable String name,
                                          @RequestBody PatchFieldRequest req) {
         return reservationService.patchField(id, name, req);
+    }
+
+    @PostMapping("/{id}/confirm")
+    public ReservationDto confirm(@PathVariable Long id, @RequestBody ConfirmRequest req) {
+        return reservationService.confirm(id, req);
     }
 }

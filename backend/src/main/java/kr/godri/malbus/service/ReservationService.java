@@ -6,6 +6,7 @@ import kr.godri.malbus.common.Times;
 import kr.godri.malbus.domain.Reservation;
 import kr.godri.malbus.domain.ReservationField;
 import kr.godri.malbus.domain.TranscriptLine;
+import kr.godri.malbus.dto.ConfirmRequest;
 import kr.godri.malbus.dto.CreateReservationRequest;
 import kr.godri.malbus.dto.PatchFieldRequest;
 import kr.godri.malbus.dto.PatchFieldResponse;
@@ -92,6 +93,40 @@ public class ReservationService {
         return new PatchFieldResponse(toDto(r, fields), null);
     }
 
+    public ReservationDto confirm(Long id, ConfirmRequest req) {
+        Reservation r = findDraft(id);
+        if (req == null || req.confirmedBy() == null || req.confirmedBy().isBlank()) {
+            throw ApiException.invalid("confirmedBy(상담원 이름)가 필요함");
+        }
+        Map<String, ReservationField> f = fields(id);
+        if (!"RESERVE".equals(f.get("purpose").value())) {
+            throw new ApiException(HttpStatus.CONFLICT, "PURPOSE_NOT_SUPPORTED", "예약이 아닌 건은 확정하지 않음");
+        }
+        List<String> left = ReservationField.REQUIRED.stream()
+                .filter(n -> f.get(n).value() == null || f.get(n).needsCheck())
+                .toList();
+        if (!left.isEmpty()) {
+            throw new ApiException(HttpStatus.CONFLICT, "CONFIRM_BLOCKED", "확인 필요 " + left.size() + "칸 남음",
+                    Map.of("fields", left));
+        }
+        // patch에서 이미 막지만 확정 전에 한 번 더 봄
+        if (f.get("from").value().equals(f.get("to").value())) {
+            throw ApiException.badRequest("SAME_STOP", "출발과 도착이 같음");
+        }
+        if (LocalDate.parse(f.get("date").value()).isBefore(Times.dateOf(r.getReceivedAt()))) {
+            throw ApiException.badRequest("PAST_DATE", "접수일 이전 날짜");
+        }
+        if (Integer.parseInt(f.get("people").value()) < 1) {
+            throw ApiException.badRequest("INVALID_PEOPLE", "인원은 1명 이상");
+        }
+
+        String now = Times.now();
+        String by = req.confirmedBy().trim();
+        r.confirm(by, now);
+        addLine(id, now, "SYSTEM", by + " 상담원이 예약 확정");
+        return toDto(r, f);
+    }
+
     private String validate(Reservation r, Map<String, ReservationField> fields, String name, JsonNode node) {
         if (node == null || node.isNull()) {
             throw ApiException.invalid("value가 비었음");
@@ -156,6 +191,11 @@ public class ReservationService {
     private Map<String, ReservationField> fields(Long id) {
         return fieldRepository.findByReservationId(id).stream()
                 .collect(toMap(ReservationField::getName, Function.identity()));
+    }
+
+    private void addLine(Long id, String at, String speaker, String text) {
+        int next = lineRepository.findByReservationIdOrderByLineNo(id).size() + 1;
+        lineRepository.save(new TranscriptLine(id, next, at, speaker, text));
     }
 
     private ReservationDto toDto(Reservation r, Map<String, ReservationField> f) {
