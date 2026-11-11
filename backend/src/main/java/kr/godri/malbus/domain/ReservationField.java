@@ -146,8 +146,9 @@ public class ReservationField {
             return; // 그대로면 바뀜 표시 같은 이전 상태 유지
         }
         String old = value();
+        boolean oldSaid = said != null; // 기본값(목적 RESERVE, 인원 1)은 고객이 한 말이 아니라 바뀜 표시 안 함
         copy(fresh);
-        if (old != null && !old.equals(value())) previousValue = old;
+        if (old != null && oldSaid && !old.equals(value())) previousValue = old;
     }
 
     // 출발 = 도착. 상담원이 고른 쪽은 그대로
