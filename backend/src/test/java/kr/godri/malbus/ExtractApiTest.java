@@ -62,14 +62,28 @@ class ExtractApiTest {
     }
 
     @Test
-    void 인원_말_안하면_빈칸() throws Exception {
+    void 인원_말_안하면_예약은_1명() throws Exception {
         extract("내일 오전 열 시에 우방에서 백화점 가요")
+                .andExpect(jsonPath("$.people.value").value(1))
+                .andExpect(jsonPath("$.people.said").isEmpty())
+                .andExpect(jsonPath("$.people.needsCheck").value(false))
+                .andExpect(jsonPath("$.people.reason").isEmpty())
+                .andExpect(jsonPath("$.people.source").value("RULE"))
+                .andExpect(jsonPath("$.people.evidence").isEmpty());
+        extract("내일 오전 열 시에 우방에서 백화점 가요. 둘이요")
+                .andExpect(jsonPath("$.people.value").value(2))
+                .andExpect(jsonPath("$.people.said").value("둘이"))
+                .andExpect(jsonPath("$.people.needsCheck").value(false));
+    }
+
+    @Test
+    void 예약이_아니면_인원_기본값_없음() throws Exception {
+        extract("내일 예약한 거 취소할게요")
                 .andExpect(jsonPath("$.people.value").isEmpty())
                 .andExpect(jsonPath("$.people.needsCheck").value(true))
                 .andExpect(jsonPath("$.people.reason").value("MISSING"));
-        extract("내일 오전 열 시에 우방에서 백화점 가요. 둘이요")
-                .andExpect(jsonPath("$.people.value").value(2))
-                .andExpect(jsonPath("$.people.needsCheck").value(false));
+        extract("백련사 가는 차는 몇 시에 있어요?")
+                .andExpect(jsonPath("$.people.value").isEmpty());
     }
 
     @Test

@@ -45,10 +45,12 @@ class ReservationLineTest {
                 .andExpect(jsonPath("$.to.value").value("S03"))
                 .andExpect(jsonPath("$.date.value").value("2026-11-18"))
                 .andExpect(jsonPath("$.time.value").value("09:30"))
-                .andExpect(jsonPath("$.people.value").isEmpty());
+                .andExpect(jsonPath("$.people.value").value(1))
+                .andExpect(jsonPath("$.people.said").isEmpty());
         say(id, "AGENT", "몇 분 타세요?");
         say(id, "CUSTOMER", "혼자요")
                 .andExpect(jsonPath("$.people.value").value(1))
+                .andExpect(jsonPath("$.people.said").value("혼자"))
                 .andExpect(jsonPath("$.people.evidence.lineNo").value(4))
                 .andExpect(jsonPath("$.from.value").value("S02"));
     }
@@ -92,6 +94,26 @@ class ReservationLineTest {
                 .andExpect(jsonPath("$.time.value").value("10:30"))
                 .andExpect(jsonPath("$.time.previous").value("09:00"))
                 .andExpect(jsonPath("$.time.needsCheck").value(false));
+    }
+
+    @Test
+    void 인원_기본값은_고객이_말하면_바뀌고_상담원_값은_그대로() throws Exception {
+        long id = create();
+        say(id, "CUSTOMER", "내일 오전 열 시에 우방에서 백화점 가요")
+                .andExpect(jsonPath("$.people.value").value(1));
+        say(id, "CUSTOMER", "아 할매하고 둘이요")
+                .andExpect(jsonPath("$.people.value").value(2))
+                .andExpect(jsonPath("$.people.said").value("둘이"))
+                .andExpect(jsonPath("$.people.previous").isEmpty()); // 기본값에서 바뀐 건 바뀜 표시 안 함
+
+        long other = create();
+        say(other, "CUSTOMER", "내일 오전 열 시에 우방에서 백화점 가요");
+        mvc.perform(patch("/reservations/" + other + "/fields/people").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"value\":3,\"note\":null}"))
+                .andExpect(status().isOk());
+        say(other, "CUSTOMER", "열 시 맞지예")
+                .andExpect(jsonPath("$.people.value").value(3))
+                .andExpect(jsonPath("$.people.source").value("AGENT"));
     }
 
     @Test
