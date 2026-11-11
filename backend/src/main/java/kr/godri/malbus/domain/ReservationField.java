@@ -16,6 +16,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 // 예약 한 건의 칸 (예약당 6행)
@@ -122,6 +123,27 @@ public class ReservationField {
 
     public String getName() { return name; }
 
-    public record Key(Long reservationId, String name) implements Serializable {
+    // record로 하면 후보 컬렉션 키를 못 만들어서 일반 클래스로
+    public static class Key implements Serializable {
+        private Long reservationId;
+        private String name;
+
+        public Key() {
+        }
+
+        public Key(Long reservationId, String name) {
+            this.reservationId = reservationId;
+            this.name = name;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Key k && Objects.equals(reservationId, k.reservationId) && Objects.equals(name, k.name);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(reservationId, name);
+        }
     }
 }
