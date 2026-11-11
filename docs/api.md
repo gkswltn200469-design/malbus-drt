@@ -86,7 +86,7 @@ type Reservation = {
   to: StopField;
   date: Field<string>;         // YYYY-MM-DD
   time: Field<string>;         // HH:MM
-  people: Field<number>;       // 1 이상. 말 안 하면 예약일 때 1 (said = null)
+  people: Field<number>;       // 이번 범위에서 고정 1 (said = null, source = RULE). 화면에 안 보여 줌, 확정 조건·채점 제외
   assist: [];                  // 선택 기능, 항상 빈 배열
   transcript: TranscriptLine[];
   createdAt: string;
@@ -127,7 +127,7 @@ type LearnedAlias = {
 | 후보 순서 | 이름 → 별칭 → 배운 별칭 → 부분 일치 → 비슷한 글자 |
 | 목록 밖 | 후보 `[]`, `reason = NOT_IN_LIST`. 정류장 생성 금지 |
 | 상대 날짜 | 오늘 / 내일 / 모레 → `receivedAt` 기준 날짜 |
-| 인원 기본값 | 예약(`RESERVE`)인데 인원을 말 안 하면 `value = 1`, `said = null`, `source = RULE`, 확인 완료. 변경·취소·문의는 `null` |
+| 인원 | 추출 안 함. 항상 `value = 1`, `needsCheck = false`, `source = RULE`, `said = null`. 확정 조건·확인 필요·채점에서 제외 (나중 인원 기능용으로 칸만 남김) |
 | 시간 | 오전·오후 없으면 제안값 + `needsCheck = true` |
 | 상담원 값 우선 | `source = AGENT` 칸은 재추출로 덮어쓰지 않음. 고객이 다른 값으로 바꾸면 `previous` 저장, `CORRECTED`, `needsCheck = true` |
 | 배운 별칭 | `PENDING`은 후보 순서만 올림. `APPROVED`부터 확인 완료 판정에 사용 |
@@ -145,7 +145,7 @@ type LearnedAlias = {
 | `STOP_NOT_FOUND` | 400 | 목록에 없는 정류장 ID |
 | `SAME_STOP` | 400 | 출발 = 도착 |
 | `PAST_DATE` | 400 | 접수일 이전 날짜 |
-| `INVALID_PEOPLE` | 400 | 인원 1 미만 |
+| `INVALID_PEOPLE` | 400 | 인원 1 미만 (이번 범위에서는 안 씀, 인원 고정 1) |
 | `CONFIRM_BLOCKED` | 409 | 확인 필요·빈칸 남음 |
 | `ALREADY_CONFIRMED` | 409 | 확정된 예약 수정·재확정 |
 | `PURPOSE_NOT_SUPPORTED` | 409 | 목적이 예약이 아닌 건을 확정 |
@@ -174,7 +174,7 @@ type LearnedAlias = {
 // Request  (receivedAt 생략 시 서버 현재 시각)
 { "receivedAt": "2026-11-17T14:00:00+09:00" }
 ```
-`201` Reservation — 모든 칸 빈칸, `purpose.value = "RESERVE"`, `status = "DRAFT"`
+`201` Reservation — 모든 칸 빈칸, `purpose.value = "RESERVE"`, `people.value = 1`, `status = "DRAFT"`
 
 ### 4. `POST /reservations/{id}/lines`
 
@@ -188,7 +188,7 @@ type LearnedAlias = {
 
 ### 5. `PATCH /reservations/{id}/fields/{name}`
 
-`{name}`: `purpose` `from` `to` `date` `time` `people`
+`{name}`: `purpose` `from` `to` `date` `time` (`people`은 고정 1이라 `400 VALIDATION_FAILED` "인원은 이번 범위에서 고정 1")
 
 ```json
 // Request
@@ -202,7 +202,7 @@ type LearnedAlias = {
 ```
 - 통과 시 `needsCheck = false`, `source = "AGENT"`
 - `aliasSuggestion`: 출발·도착에서 고객이 한 말이 그 정류장의 이름·별칭에 없을 때 → FE가 **별칭 추가 모달** 띄움
-- 에러: `STOP_NOT_FOUND` `SAME_STOP` `PAST_DATE` `INVALID_PEOPLE` `ALREADY_CONFIRMED`
+- 에러: `STOP_NOT_FOUND` `SAME_STOP` `PAST_DATE` `ALREADY_CONFIRMED`
 
 ### 6. `POST /reservations/{id}/confirm`
 
@@ -212,7 +212,7 @@ type LearnedAlias = {
 // Request
 { "confirmedBy": "김채영" }
 ```
-- 조건(`purpose = RESERVE`): `from` `to` `date` `time` `people` 모두 `value ≠ null` · `needsCheck = false` · 출발≠도착 · 인원≥1 · 접수일 이후
+- 조건(`purpose = RESERVE`): `from` `to` `date` `time` 모두 `value ≠ null` · `needsCheck = false` · 출발≠도착 · 접수일 이후 (인원은 고정 1이라 안 봄)
 - `200` Reservation — `status = "CONFIRMED"`, transcript에 `SYSTEM` 기록 줄 추가, DB 저장 (D-6의 JSON 화면은 이 응답을 그대로 표시)
 - 목적이 변경·취소·문의면 `409 PURPOSE_NOT_SUPPORTED`. 분류 결과는 양식에 보여 주되 이번 범위에서는 확정하지 않음 (상담원이 목적을 예약으로 고치면 확정 가능, 아니면 DRAFT로 남김)
 - `409 CONFIRM_BLOCKED` (`details.fields`) · `409 ALREADY_CONFIRMED`
@@ -291,6 +291,6 @@ AI는 말·근거·후보 순서만 반환. **정류장 확정과 `needsCheck` �
 | # | 내용 | 결정 |
 |---|---|---|
 | 1 | 목적이 변경·취소·문의일 때 | 분류만 하고 확정은 예약만 가능 (`PURPOSE_NOT_SUPPORTED`) |
-| 2 | "인원 따로 고려 안 함" | 한 통화에 여러 예약으로 나누지 않음. 인원 칸은 유지. 인원 기본값 1명: 예약인데 말 안 하면 1 (`said = null`), 변경·취소·문의는 `null` (11/11 변경) |
+| 2 | "인원 따로 고려 안 함" | 한 통화에 여러 예약으로 나누지 않음. 인원은 화면·채점 제외, DB 기본값 1 (나중 인원 기능용으로 칸은 남김) (11/11 변경) |
 | 3 | 별칭 승인 기준 | 사람이 승인. 2번 이상 같은 선택 + 충돌 없음이면 승인 추천 표시 |
 | 4 | 기술 스택 | Spring Boot + JPA + SQLite, 포트 8080 |

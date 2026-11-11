@@ -100,7 +100,7 @@ erDiagram
 
 ## 설계 메모
 
-- **출발·도착 FK:** `reservation_field.stop_id`에만 정류장 FK를 건다. 목록 밖 ID는 DB가 거부한다. 다른 칸 값은 `value`(TEXT)에 저장하고 API에서 타입 변환(`people` → 숫자). `people`은 예약인데 인원을 말 안 하면 `value = '1'`, `said` NULL, `source = 'RULE'`로 저장 (변경·취소·문의는 NULL).
+- **출발·도착 FK:** `reservation_field.stop_id`에만 정류장 FK를 건다. 목록 밖 ID는 DB가 거부한다. 다른 칸 값은 `value`(TEXT)에 저장하고 API에서 타입 변환(`people` → 숫자). `people`은 이번 범위에서 항상 `value = '1'`, `needs_check = 0`, `said` NULL, `source = 'RULE'`로 저장 (화면·채점 제외, 나중 인원 기능용으로 칸만 남김).
 - **`conflicts`는 저장하지 않음:** `learned_alias`에서 같은 `said`·다른 `stop_id` 행을 조회해 계산한다.
 - **DB로 못 막는 규칙은 BE가 검사:** 출발 ≠ 도착(행이 달라 CHECK 불가), 과거 날짜, 확정 조건, 확정 후 수정 금지.
 - **D-6 JSON 화면:** `GET /reservations/{id}` 응답을 그대로 보여 준다. 파일로 따로 내보내지 않음.
