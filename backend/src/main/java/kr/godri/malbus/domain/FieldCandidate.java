@@ -22,6 +22,12 @@ public class FieldCandidate {
         this.reason = reason;
     }
 
+    public FieldCandidate(FieldCandidate c) {
+        this(c.rank, c.stopId, c.matchType, c.reason);
+    }
+
+    public String getStopId() { return stopId; }
+
     public StopFieldDto.Candidate toDto() {
         return new StopFieldDto.Candidate(stopId, matchType, reason);
     }
