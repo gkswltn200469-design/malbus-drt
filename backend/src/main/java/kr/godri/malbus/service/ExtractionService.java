@@ -1,9 +1,13 @@
 package kr.godri.malbus.service;
 
+import kr.godri.malbus.common.ApiException;
 import kr.godri.malbus.common.Times;
 import kr.godri.malbus.domain.FieldCandidate;
 import kr.godri.malbus.domain.ReservationField;
 import kr.godri.malbus.domain.TranscriptLine;
+import kr.godri.malbus.dto.ExtractRequest;
+import kr.godri.malbus.dto.ExtractResponse;
+import kr.godri.malbus.dto.LineRequest;
 import kr.godri.malbus.dto.StopDto;
 import kr.godri.malbus.extract.AiOutput;
 import kr.godri.malbus.extract.Extractor;
@@ -54,6 +58,21 @@ public class ExtractionService {
         f.put("people", people(ai.people(), lines, src));
         checkSameStop(f.get("from"), f.get("to"));
         return f;
+    }
+
+    // POST /extract. 저장 없이 추출만
+    public ExtractResponse extract(ExtractRequest req) {
+        if (req == null || req.transcript() == null) {
+            throw ApiException.invalid("transcript가 필요함");
+        }
+        String receivedAt = req.receivedAt() == null ? Times.now() : Times.format(Times.parse(req.receivedAt()));
+        List<TranscriptLine> lines = new ArrayList<>();
+        for (LineRequest l : req.transcript()) {
+            if (l == null) throw ApiException.invalid("transcript에 빈 줄이 있음");
+            l.validate();
+            lines.add(new TranscriptLine(null, lines.size() + 1, receivedAt, l.speaker(), l.text()));
+        }
+        return ExtractResponse.of(mode(), extract(receivedAt, lines));
     }
 
     public static void checkSameStop(ReservationField from, ReservationField to) {
