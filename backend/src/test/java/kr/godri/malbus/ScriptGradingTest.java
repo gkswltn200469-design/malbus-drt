@@ -35,10 +35,10 @@ class ScriptGradingTest {
 
     private static final Path ANSWERS = Path.of("../test/대본_정답지.csv");
     private static final Path RESULT = Path.of("../test/채점결과_RULE.md");
-    private static final List<String> COLS = List.of("목적", "출발", "도착", "날짜", "시간", "인원", "확인필요");
-    private static final Map<String, String> PURPOSE = Map.of("예약", "RESERVE", "변경", "CHANGE", "취소", "CANCEL", "문의", "INQUIRY");
-    private static final List<String> KEYS = List.of("from", "to", "date", "time", "people");
-    private static final List<String> KO = List.of("출발", "도착", "날짜", "시간", "인원");
+    // 채점 칸은 5개. 정답지에 목적·인원 열이 있어도 안 봄 (목적 고정, 인원 화면 제외)
+    private static final List<String> COLS = List.of("출발", "도착", "날짜", "시간", "확인필요");
+    private static final List<String> KEYS = List.of("from", "to", "date", "time");
+    private static final List<String> KO = List.of("출발", "도착", "날짜", "시간");
 
     private static final Comparator<String> BY_FIELD = Comparator.comparingInt(KO::indexOf);
 
@@ -51,49 +51,46 @@ class ScriptGradingTest {
     @Test
     void 대본_채점() throws Exception {
         List<String> lines = Files.readAllLines(ANSWERS, StandardCharsets.UTF_8);
-        List<String> header = parse(lines.get(0).replace("﻿", ""));
+        List<String> header = parse(lines.get(0).replace("\uFEFF", ""));
 
         Map<String, Integer> right = new LinkedHashMap<>();
         COLS.forEach(c -> right.put(c, 0));
         List<String> rows = new ArrayList<>();
-        int total = 0, peopleBlank = 0, onlyPeopleCheck = 0, notReserveCheck = 0;
+        List<String> checkWrong = new ArrayList<>();
+        int total = 0;
 
         for (String raw : lines.subList(1, lines.size())) {
             if (raw.isBlank()) continue;
             List<String> cells = parse(raw);
             Map<String, String> row = new LinkedHashMap<>();
-            for (int i = 0; i < header.size(); i++) row.put(header.get(i), i < cells.size() ? cells.get(i).trim() : "");
+            for (int i = 0; i < header.size(); i++) row.put(header.get(i).trim(), i < cells.size() ? cells.get(i).trim() : "");
             JsonNode out = extract(row);
             assertThat(out.get("mode").asText()).isEqualTo("RULE");
             total++;
 
             Map<String, String> marks = new LinkedHashMap<>();
-            marks.put("목적", mark(out.at("/purpose/value").asText(), PURPOSE.get(row.get("목적")), row.get("목적")));
-            marks.put("출발", stopMark(out.get("from"), row.get("출발")));
-            marks.put("도착", stopMark(out.get("to"), row.get("도착")));
-            marks.put("날짜", mark(text(out.at("/date/value")), row.get("날짜"), row.get("날짜")));
-            marks.put("시간", mark(text(out.at("/time/value")), row.get("시간"), row.get("시간")));
-            marks.put("인원", mark(text(out.at("/people/value")), row.get("인원"), row.get("인원")));
+            marks.put("출발", stopMark(out.get("from"), col(row, "출발")));
+            marks.put("도착", stopMark(out.get("to"), col(row, "도착")));
+            marks.put("날짜", mark(text(out.at("/date/value")), col(row, "날짜")));
+            marks.put("시간", mark(text(out.at("/time/value")), col(row, "시간")));
 
+            // 확인필요는 출발·도착·날짜·시간만 비교
             Set<String> expected = new TreeSet<>(BY_FIELD);
-            if (!row.get("확인필요").isEmpty()) expected.addAll(Arrays.asList(row.get("확인필요").split("\\|")));
+            for (String f : col(row, "확인필요").split("\\|")) {
+                if (KO.contains(f.trim())) expected.add(f.trim());
+            }
             Set<String> got = new TreeSet<>(BY_FIELD);
             for (int i = 0; i < KEYS.size(); i++) {
                 if (out.at("/" + KEYS.get(i) + "/needsCheck").asBoolean()) got.add(KO.get(i));
             }
-            marks.put("확인필요", expected.equals(got) ? "O"
-                    : "X: " + join(got) + " (정답 " + join(expected) + ")");
-
-            if (out.at("/people/value").isNull() && !row.get("인원").isEmpty()) peopleBlank++;
-            Set<String> withoutPeople = new TreeSet<>(got);
-            withoutPeople.remove("인원");
-            if (!expected.equals(got) && expected.equals(withoutPeople)) onlyPeopleCheck++;
-            if (!expected.equals(got) && !row.get("목적").equals("예약")) notReserveCheck++;
+            boolean checkOk = expected.equals(got);
+            marks.put("확인필요", checkOk ? "O" : "X: " + join(got) + " (정답 " + join(expected) + ")");
+            if (!checkOk) checkWrong.add(col(row, "번호") + "번(" + col(row, "유형") + ")");
 
             marks.forEach((c, m) -> {
                 if (m.equals("O")) right.merge(c, 1, Integer::sum);
             });
-            rows.add("| " + row.get("번호") + " | " + row.get("유형") + " | " + String.join(" | ", marks.values()) + " |");
+            rows.add("| " + col(row, "번호") + " | " + col(row, "유형") + " | " + String.join(" | ", marks.values()) + " |");
         }
         assertThat(total).isEqualTo(20);
         int n = total;
@@ -102,10 +99,11 @@ class ScriptGradingTest {
         md.append("# 채점 결과 (RULE 모드)\n\n");
         md.append("- 대상: `test/대본_정답지.csv` 대본 ").append(total).append("개를 `POST /extract`에 넣은 결과 (규칙 모드, 배운 별칭 없음)\n");
         md.append("- 다시 만들기: `cd backend && ./gradlew grade` (이 파일을 덮어씀)\n");
+        md.append("- 채점 칸: 출발, 도착, 날짜, 시간, 확인필요. 목적('이동수단 예약' 고정)과 인원(화면 제외)은 채점하지 않음\n");
         md.append("- 판정 기준\n");
-        md.append("  - 목적·날짜·시간·인원: `value`가 정답과 같으면 O. 정답 빈칸은 `null`이어야 O\n");
+        md.append("  - 날짜·시간: `value`가 정답과 같으면 O. 정답 빈칸은 `null`이어야 O\n");
         md.append("  - 출발·도착: 정답이 ID 하나면 `value`가 같아야 O. `S01|S12`처럼 여럿이면 `value`가 비고 후보가 정확히 그 정류장들이어야 O. 정답이 빈칸이면 `value`도 비고 후보도 없어야 O\n");
-        md.append("  - 확인필요: 출발·도착·날짜·시간·인원 중 `needsCheck = true`인 칸 묶음이 정답지 `확인필요`와 똑같아야 O\n\n");
+        md.append("  - 확인필요: 출발·도착·날짜·시간 중 `needsCheck = true`인 칸 묶음이 정답지 `확인필요`와 똑같아야 O\n\n");
 
         md.append("## 항목별\n\n| 항목 | 맞음 | 정확도 |\n|---|---|---|\n");
         right.forEach((c, ok) -> md.append("| ").append(c).append(" | ").append(ok).append("/").append(n)
@@ -122,11 +120,8 @@ class ScriptGradingTest {
         rows.forEach(r -> md.append(r).append("\n"));
 
         md.append("\n## 참고\n\n");
-        md.append("- 인원 결과가 빈칸인데 정답지에는 값이 있는 경우: ").append(peopleBlank)
-                .append("건. `docs/api.md`·기능 규칙서는 인원을 말하지 않으면 1을 넣지 않고 빈칸 + 확인 필요로 둠. 정답지는 인원을 말하지 않은 대본도 1로 적음\n");
-        md.append("- 확인필요가 인원 칸 하나 때문에만 틀린 경우: ").append(onlyPeopleCheck).append("건\n");
-        md.append("- 변경·취소·문의 대본에서 확인필요가 틀린 경우: ").append(notReserveCheck)
-                .append("건. 정답지는 이 대본들의 확인필요를 비워 두고, BE는 빈칸도 `needsCheck = true`로 둠 (`docs/api.md` Field 정의)\n");
+        md.append("- 확인필요가 틀린 대본: ").append(checkWrong.isEmpty() ? "없음" : String.join(", ", checkWrong)).append("\n");
+        md.append("- BE는 빈칸도 `needsCheck = true`로 둠 (`docs/api.md` Field 정의)\n");
         Files.writeString(RESULT, md.toString(), StandardCharsets.UTF_8);
     }
 
@@ -145,10 +140,15 @@ class ScriptGradingTest {
         return om.readTree(res);
     }
 
-    private static String mark(String got, String expected, String expectedShown) {
+    private static String mark(String got, String expected) {
         String g = got == null ? "" : got;
         String e = expected == null ? "" : expected;
-        return g.equals(e) ? "O" : "X: " + show(g) + " (정답 " + show(expectedShown) + ")";
+        return g.equals(e) ? "O" : "X: " + show(g) + " (정답 " + show(e) + ")";
+    }
+
+    // 정답지 열 이름으로 읽음. 없는 열은 빈칸
+    private static String col(Map<String, String> row, String name) {
+        return row.getOrDefault(name, "");
     }
 
     private static String stopMark(JsonNode f, String expected) {
