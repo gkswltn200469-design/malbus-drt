@@ -12,3 +12,4 @@
 ### 2026-11-11
 
 - 백엔드 초기 세팅(#3): `backend/` Spring Boot 3.5 + JPA + SQLite, 시작 시 `data/malbus.db` 생성·정류장 CSV 적재, FK 켜짐 테스트, `GET /health`, `GET /stops`, 공통 에러 형식
+- 예약 API(#5): 생성·목록·상세, 칸 수정(`PATCH`) 검증, 확정 검증(`CONFIRM_BLOCKED`, `PURPOSE_NOT_SUPPORTED`, `ALREADY_CONFIRMED`), 확정 시 SYSTEM 줄 기록
