@@ -86,7 +86,7 @@ type Reservation = {
   to: StopField;
   date: Field<string>;         // YYYY-MM-DD
   time: Field<string>;         // HH:MM
-  people: Field<number>;       // 1 이상. 말 안 하면 null (1 기본값 금지)
+  people: Field<number>;       // 1 이상. 말 안 하면 예약일 때 1 (said = null)
   assist: [];                  // 선택 기능, 항상 빈 배열
   transcript: TranscriptLine[];
   createdAt: string;
@@ -127,6 +127,7 @@ type LearnedAlias = {
 | 후보 순서 | 이름 → 별칭 → 배운 별칭 → 부분 일치 → 비슷한 글자 |
 | 목록 밖 | 후보 `[]`, `reason = NOT_IN_LIST`. 정류장 생성 금지 |
 | 상대 날짜 | 오늘 / 내일 / 모레 → `receivedAt` 기준 날짜 |
+| 인원 기본값 | 예약(`RESERVE`)인데 인원을 말 안 하면 `value = 1`, `said = null`, `source = RULE`, 확인 완료. 변경·취소·문의는 `null` |
 | 시간 | 오전·오후 없으면 제안값 + `needsCheck = true` |
 | 상담원 값 우선 | `source = AGENT` 칸은 재추출로 덮어쓰지 않음. 고객이 다른 값으로 바꾸면 `previous` 저장, `CORRECTED`, `needsCheck = true` |
 | 배운 별칭 | `PENDING`은 후보 순서만 올림. `APPROVED`부터 확인 완료 판정에 사용 |
@@ -290,6 +291,6 @@ AI는 말·근거·후보 순서만 반환. **정류장 확정과 `needsCheck` �
 | # | 내용 | 결정 |
 |---|---|---|
 | 1 | 목적이 변경·취소·문의일 때 | 분류만 하고 확정은 예약만 가능 (`PURPOSE_NOT_SUPPORTED`) |
-| 2 | "인원 따로 고려 안 함" | 한 통화에 여러 예약으로 나누지 않음. 인원 칸은 유지 |
+| 2 | "인원 따로 고려 안 함" | 한 통화에 여러 예약으로 나누지 않음. 인원 칸은 유지. 인원 기본값 1명: 예약인데 말 안 하면 1 (`said = null`), 변경·취소·문의는 `null` (11/11 변경) |
 | 3 | 별칭 승인 기준 | 사람이 승인. 2번 이상 같은 선택 + 충돌 없음이면 승인 추천 표시 |
 | 4 | 기술 스택 | Spring Boot + JPA + SQLite, 포트 8080 |
