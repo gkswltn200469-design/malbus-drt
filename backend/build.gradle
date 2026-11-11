@@ -26,7 +26,17 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform { excludeTags 'grading' }
     // 테스트용 db는 매번 새로
     doFirst { delete fileTree('build') { include '*.db*' } }
+}
+
+// 대본 20개 채점 -> ../test/채점결과_RULE.md
+tasks.register('grade', Test) {
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'grading' }
+    outputs.upToDateWhen { false }
+    doFirst { delete fileTree('build') { include 'grading.db*' } }
 }
