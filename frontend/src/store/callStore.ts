@@ -1,6 +1,6 @@
 // 통화 보조 화면의 상태 저장소. docsui/D-1(통화 보조 화면 기본)·D-4(확정 버튼)·
 // D-5(확정 결과 화면)의 동작을 그대로 구현한다. 지금은 프론트엔드 단독 데모라서
-// 메모리 상태로만 있고 새로고침하면 사라진다 (강대운 예약 API 연동 전 자리표시).
+// 백엔드 저장 대신 메모리 + sessionStorage에만 쌓인다 (강대운 예약 API 연동 전 자리표시).
 
 import { create } from 'zustand'
 import { STOPS } from '@/data/stops'
