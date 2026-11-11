@@ -122,8 +122,8 @@ class ScriptGradingTest {
         rows.forEach(r -> md.append(r).append("\n"));
 
         md.append("\n## 참고\n\n");
-        md.append("- 인원 결과가 빈칸인데 정답지에는 값이 있는 경우: ").append(peopleBlank)
-                .append("건. `docs/api.md`·기능 규칙서는 인원을 말하지 않으면 1을 넣지 않고 빈칸 + 확인 필요로 둠. 정답지는 인원을 말하지 않은 대본도 1로 적음\n");
+        md.append("- 인원을 말하지 않은 예약은 1명(`said = null`, `source = RULE`)으로 채움. 변경·취소·문의는 빈칸 (11/11 결정)\n");
+        md.append("- 인원 결과가 빈칸인데 정답지에는 값이 있는 경우: ").append(peopleBlank).append("건\n");
         md.append("- 확인필요가 인원 칸 하나 때문에만 틀린 경우: ").append(onlyPeopleCheck).append("건\n");
         md.append("- 변경·취소·문의 대본에서 확인필요가 틀린 경우: ").append(notReserveCheck)
                 .append("건. 정답지는 이 대본들의 확인필요를 비워 두고, BE는 빈칸도 `needsCheck = true`로 둠 (`docs/api.md` Field 정의)\n");
