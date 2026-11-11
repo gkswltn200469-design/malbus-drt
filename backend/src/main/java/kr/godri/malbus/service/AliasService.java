@@ -5,6 +5,7 @@ import kr.godri.malbus.common.Times;
 import kr.godri.malbus.domain.LearnedAlias;
 import kr.godri.malbus.dto.AddAliasRequest;
 import kr.godri.malbus.dto.LearnedAliasDto;
+import kr.godri.malbus.dto.PatchFieldResponse;
 import kr.godri.malbus.extract.StopMatcher;
 import kr.godri.malbus.extract.Texts;
 import kr.godri.malbus.repository.LearnedAliasRepository;
@@ -95,6 +96,15 @@ public class AliasService {
         return aliasRepository.findByStatusIn(List.of("PENDING", "APPROVED")).stream()
                 .map(a -> new StopMatcher.Learned(a.getSaid(), a.getStopId(), a.isApproved()))
                 .toList();
+    }
+
+    // 고객이 한 말이 고른 정류장의 이름·별칭에 없으면 별칭 추가 제안
+    @Transactional(readOnly = true)
+    public PatchFieldResponse.AliasSuggestion suggest(String said, String stopId) {
+        if (said == null || clean(said).isEmpty()) return null;
+        boolean known = StopMatcher.match(said, stopService.findAll(), List.of()).candidates().stream()
+                .anyMatch(c -> c.stopId().equals(stopId) && !c.matchType().equals("PARTIAL") && !c.matchType().equals("FUZZY"));
+        return known ? null : new PatchFieldResponse.AliasSuggestion(clean(said), stopId);
     }
 
     private LearnedAlias find(Long id) {
