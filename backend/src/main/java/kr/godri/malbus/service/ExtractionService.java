@@ -58,7 +58,7 @@ public class ExtractionService {
         f.put("to", stop("to", ai.to(), lines, stops, learned, src));
         f.put("date", date(ai.date(), Times.dateOf(receivedAt), lines, src));
         f.put("time", time(ai.time(), lines, src));
-        f.put("people", people(ai.people(), lines, src));
+        f.put("people", people(ai.people(), f.get("purpose").value(), lines, src));
         checkSameStop(f.get("from"), f.get("to"));
         return f;
     }
@@ -157,9 +157,13 @@ public class ExtractionService {
                 : blank("time").fill(v, t.said(), false, null, null, no, text, src);
     }
 
-    // 말 안 하면 빈칸. 1명 기본값 안 넣음
-    private ReservationField people(AiOutput.People p, List<TranscriptLine> lines, String src) {
-        if (p == null || (p.said() == null && p.value() == null)) return blank("people");
+    // 예약인데 인원을 말 안 하면 1명. said 없이 RULE로 둬서 고객이 말한 값과 구분 (11/11 결정)
+    private ReservationField people(AiOutput.People p, String purpose, List<TranscriptLine> lines, String src) {
+        if (p == null || (p.said() == null && p.value() == null)) {
+            return "RESERVE".equals(purpose)
+                    ? blank("people").fill("1", null, false, null, null, null, null, "RULE")
+                    : blank("people");
+        }
         Integer no = p.evidenceLineNo();
         String text = lineText(lines, no);
         if (p.value() == null) {
