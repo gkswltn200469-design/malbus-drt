@@ -50,8 +50,7 @@ class ReservationLineTest {
         say(id, "AGENT", "몇 분 타세요?");
         say(id, "CUSTOMER", "혼자요")
                 .andExpect(jsonPath("$.people.value").value(1))
-                .andExpect(jsonPath("$.people.said").value("혼자"))
-                .andExpect(jsonPath("$.people.evidence.lineNo").value(4))
+                .andExpect(jsonPath("$.people.said").isEmpty())
                 .andExpect(jsonPath("$.from.value").value("S02"));
     }
 
@@ -80,8 +79,7 @@ class ReservationLineTest {
 
         // 다른 줄이 더 들어와도 바뀜 표시는 남음
         say(id, "CUSTOMER", "둘이 갑니다")
-                .andExpect(jsonPath("$.from.reason").value("CORRECTED"))
-                .andExpect(jsonPath("$.people.value").value(2));
+                .andExpect(jsonPath("$.from.reason").value("CORRECTED"));
     }
 
     @Test
@@ -97,23 +95,15 @@ class ReservationLineTest {
     }
 
     @Test
-    void 인원_기본값은_고객이_말하면_바뀌고_상담원_값은_그대로() throws Exception {
+    void 인원은_말해도_1이고_수정_안됨() throws Exception {
         long id = create();
-        say(id, "CUSTOMER", "내일 오전 열 시에 우방에서 백화점 가요")
-                .andExpect(jsonPath("$.people.value").value(1));
-        say(id, "CUSTOMER", "아 할매하고 둘이요")
-                .andExpect(jsonPath("$.people.value").value(2))
-                .andExpect(jsonPath("$.people.said").value("둘이"))
-                .andExpect(jsonPath("$.people.previous").isEmpty()); // 기본값에서 바뀐 건 바뀜 표시 안 함
-
-        long other = create();
-        say(other, "CUSTOMER", "내일 오전 열 시에 우방에서 백화점 가요");
-        mvc.perform(patch("/reservations/" + other + "/fields/people").contentType(MediaType.APPLICATION_JSON)
+        say(id, "CUSTOMER", "내일 오전 열 시에 우방에서 백화점 가요. 할매하고 둘이요")
+                .andExpect(jsonPath("$.people.value").value(1))
+                .andExpect(jsonPath("$.people.source").value("RULE"));
+        mvc.perform(patch("/reservations/" + id + "/fields/people").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"value\":3,\"note\":null}"))
-                .andExpect(status().isOk());
-        say(other, "CUSTOMER", "열 시 맞지예")
-                .andExpect(jsonPath("$.people.value").value(3))
-                .andExpect(jsonPath("$.people.source").value("AGENT"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
     }
 
     @Test
