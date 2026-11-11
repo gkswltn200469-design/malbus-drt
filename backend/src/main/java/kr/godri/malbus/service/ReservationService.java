@@ -108,6 +108,9 @@ public class ReservationService {
         if (!ReservationField.NAMES.contains(name)) {
             throw ApiException.invalid("없는 칸: " + name);
         }
+        if (name.equals("people")) {
+            throw ApiException.invalid("인원은 이번 범위에서 고정 1");
+        }
         Reservation r = findDraft(id);
         Map<String, ReservationField> fields = fields(id);
         String value = validate(r, fields, name, req == null ? null : req.value());
@@ -143,9 +146,6 @@ public class ReservationService {
         if (LocalDate.parse(f.get("date").value()).isBefore(Times.dateOf(r.getReceivedAt()))) {
             throw ApiException.badRequest("PAST_DATE", "접수일 이전 날짜");
         }
-        if (Integer.parseInt(f.get("people").value()) < 1) {
-            throw ApiException.badRequest("INVALID_PEOPLE", "인원은 1명 이상");
-        }
 
         String now = Times.now();
         String by = req.confirmedBy().trim();
@@ -157,18 +157,6 @@ public class ReservationService {
     private String validate(Reservation r, Map<String, ReservationField> fields, String name, JsonNode node) {
         if (node == null || node.isNull()) {
             throw ApiException.invalid("value가 비었음");
-        }
-        if (name.equals("people")) {
-            boolean number = node.isIntegralNumber() && node.canConvertToInt();
-            boolean text = node.isTextual() && node.asText().trim().matches("-?\\d{1,9}");
-            if (!number && !text) {
-                throw ApiException.invalid("인원은 정수");
-            }
-            int n = number ? node.asInt() : Integer.parseInt(node.asText().trim());
-            if (n < 1) {
-                throw ApiException.badRequest("INVALID_PEOPLE", "인원은 1명 이상");
-            }
-            return String.valueOf(n);
         }
         if (!node.isTextual()) {
             throw ApiException.invalid(name + " 값은 문자열");

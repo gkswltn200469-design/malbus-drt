@@ -26,7 +26,7 @@ import java.util.function.Function;
 public class ReservationField {
 
     public static final List<String> NAMES = List.of("purpose", "from", "to", "date", "time", "people");
-    public static final List<String> REQUIRED = List.of("from", "to", "date", "time", "people");
+    public static final List<String> REQUIRED = List.of("from", "to", "date", "time"); // 인원은 고정 1이라 뺌
 
     private static final Map<String, String> ASK = Map.of(
             "from", "어디서 타세요?",
