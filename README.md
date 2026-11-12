@@ -34,6 +34,7 @@ cd backend
 - `backend` 폴더에서 실행해야 합니다. DB와 CSV 경로가 `../data` 기준입니다.
 - 스키마나 정류장 CSV를 바꿨으면 `data/malbus.db`를 지우고 다시 실행합니다.
 - 확인: `curl localhost:8080/health` → `{"status":"ok","mode":"RULE","stops":17}`
+- LLM 키는 환경 변수 `ANTHROPIC_API_KEY`로만 넣습니다. 키가 없으면 규칙 모드(`mode: RULE`)로 동작합니다. LLM 추출기는 아직 붙지 않아서 지금은 키가 있어도 규칙 모드입니다.
 
 ## 참고용 시제품 실행
 

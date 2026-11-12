@@ -2,6 +2,7 @@ package kr.godri.malbus.controller;
 
 import kr.godri.malbus.dto.ConfirmRequest;
 import kr.godri.malbus.dto.CreateReservationRequest;
+import kr.godri.malbus.dto.LineRequest;
 import kr.godri.malbus.dto.PatchFieldRequest;
 import kr.godri.malbus.dto.PatchFieldResponse;
 import kr.godri.malbus.dto.ReservationDto;
@@ -45,6 +46,11 @@ public class ReservationController {
     @GetMapping("/{id}")
     public ReservationDto get(@PathVariable Long id) {
         return reservationService.get(id);
+    }
+
+    @PostMapping("/{id}/lines")
+    public ReservationDto addLine(@PathVariable Long id, @RequestBody LineRequest req) {
+        return reservationService.addLine(id, req);
     }
 
     @PatchMapping("/{id}/fields/{name}")

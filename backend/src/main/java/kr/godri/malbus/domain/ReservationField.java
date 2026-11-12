@@ -16,6 +16,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 // 예약 한 건의 칸 (예약당 6행)
@@ -102,6 +103,67 @@ public class ReservationField {
         this.note = note;
     }
 
+    // 추출 결과 채우기 (판정은 ExtractionService)
+    public ReservationField fill(String newValue, String said, boolean needsCheck, String reason, String askHint,
+                                 Integer lineNo, String lineText, String source) {
+        if (isStop()) stopId = newValue;
+        else value = newValue;
+        this.said = said;
+        this.needsCheck = needsCheck;
+        this.reason = reason;
+        this.askHint = askHint;
+        this.evidenceLineNo = lineNo;
+        this.evidenceText = lineText;
+        this.source = source;
+        return this;
+    }
+
+    public void setCandidates(List<FieldCandidate> top, int moreCount) {
+        candidates.clear();
+        candidates.addAll(top);
+        this.moreCount = moreCount;
+    }
+
+    // 재추출 반영. 상담원이 고른 칸은 고객이 다른 값을 말했을 때만 바꾸고 CORRECTED로 표시
+    public void applyExtracted(ReservationField fresh) {
+        boolean sameSaid = Objects.equals(said, fresh.said);
+        if ("AGENT".equals(source)) {
+            boolean agrees = Objects.equals(value(), fresh.value())
+                    || (fresh.value() == null && fresh.candidateIds().contains(value()));
+            if (fresh.said == null || sameSaid || agrees) return;
+            String agentValue = value();
+            copy(fresh);
+            previousValue = agentValue;
+            needsCheck = true;
+            reason = "CORRECTED";
+            return;
+        }
+        if (sameSaid && Objects.equals(value(), fresh.value()) && candidateIds().equals(fresh.candidateIds())) {
+            return; // 그대로면 바뀜 표시 같은 이전 상태 유지
+        }
+        String old = value();
+        copy(fresh);
+        if (old != null && !old.equals(value())) previousValue = old;
+    }
+
+    // 출발 = 도착. 상담원이 고른 쪽은 그대로
+    public void markSameStop() {
+        if ("AGENT".equals(source)) return;
+        needsCheck = true;
+        reason = "INVALID";
+        askHint = "출발과 도착이 같아요. 다시 여쭤 보세요";
+    }
+
+    private void copy(ReservationField f) {
+        fill(f.value(), f.said, f.needsCheck, f.reason, f.askHint, f.evidenceLineNo, f.evidenceText, f.source);
+        decidedAt = null;
+        setCandidates(f.candidates.stream().map(c -> new FieldCandidate(c)).toList(), f.moreCount);
+    }
+
+    private List<String> candidateIds() {
+        return candidates.stream().map(FieldCandidate::getStopId).toList();
+    }
+
     public <T> FieldDto<T> toDto(Function<String, T> conv) {
         return new FieldDto<>(convert(value(), conv), said, needsCheck, reason, askHint, evidence(),
                 convert(previousValue, conv), source, decidedAt, note);
@@ -122,6 +184,27 @@ public class ReservationField {
 
     public String getName() { return name; }
 
-    public record Key(Long reservationId, String name) implements Serializable {
+    // record로 하면 후보 컬렉션 키를 못 만들어서 일반 클래스로
+    public static class Key implements Serializable {
+        private Long reservationId;
+        private String name;
+
+        public Key() {
+        }
+
+        public Key(Long reservationId, String name) {
+            this.reservationId = reservationId;
+            this.name = name;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Key k && Objects.equals(reservationId, k.reservationId) && Objects.equals(name, k.name);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(reservationId, name);
+        }
     }
 }
