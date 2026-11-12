@@ -45,11 +45,12 @@ class ReservationLineTest {
                 .andExpect(jsonPath("$.to.value").value("S03"))
                 .andExpect(jsonPath("$.date.value").value("2026-11-18"))
                 .andExpect(jsonPath("$.time.value").value("09:30"))
-                .andExpect(jsonPath("$.people.value").isEmpty());
+                .andExpect(jsonPath("$.people.value").value(1))
+                .andExpect(jsonPath("$.people.said").isEmpty());
         say(id, "AGENT", "몇 분 타세요?");
         say(id, "CUSTOMER", "혼자요")
                 .andExpect(jsonPath("$.people.value").value(1))
-                .andExpect(jsonPath("$.people.evidence.lineNo").value(4))
+                .andExpect(jsonPath("$.people.said").isEmpty())
                 .andExpect(jsonPath("$.from.value").value("S02"));
     }
 
@@ -78,8 +79,7 @@ class ReservationLineTest {
 
         // 다른 줄이 더 들어와도 바뀜 표시는 남음
         say(id, "CUSTOMER", "둘이 갑니다")
-                .andExpect(jsonPath("$.from.reason").value("CORRECTED"))
-                .andExpect(jsonPath("$.people.value").value(2));
+                .andExpect(jsonPath("$.from.reason").value("CORRECTED"));
     }
 
     @Test
@@ -92,6 +92,18 @@ class ReservationLineTest {
                 .andExpect(jsonPath("$.time.value").value("10:30"))
                 .andExpect(jsonPath("$.time.previous").value("09:00"))
                 .andExpect(jsonPath("$.time.needsCheck").value(false));
+    }
+
+    @Test
+    void 인원은_말해도_1이고_수정_안됨() throws Exception {
+        long id = create();
+        say(id, "CUSTOMER", "내일 오전 열 시에 우방에서 백화점 가요. 할매하고 둘이요")
+                .andExpect(jsonPath("$.people.value").value(1))
+                .andExpect(jsonPath("$.people.source").value("RULE"));
+        mvc.perform(patch("/reservations/" + id + "/fields/people").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"value\":3,\"note\":null}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
     }
 
     @Test

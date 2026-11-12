@@ -26,14 +26,13 @@ import java.util.function.Function;
 public class ReservationField {
 
     public static final List<String> NAMES = List.of("purpose", "from", "to", "date", "time", "people");
-    public static final List<String> REQUIRED = List.of("from", "to", "date", "time", "people");
+    public static final List<String> REQUIRED = List.of("from", "to", "date", "time"); // 인원은 고정 1이라 뺌
 
     private static final Map<String, String> ASK = Map.of(
             "from", "어디서 타세요?",
             "to", "어디로 가세요?",
             "date", "언제 타세요?",
-            "time", "몇 시에 타세요?",
-            "people", "몇 분 타세요?");
+            "time", "몇 시에 타세요?");
 
     @Id
     @Column(name = "reservation_id") // 후보 테이블 join에서 이 이름으로 찾음
@@ -72,6 +71,10 @@ public class ReservationField {
         if (name.equals("purpose")) {
             f.value = "RESERVE";
             f.needsCheck = false;
+        } else if (name.equals("people")) { // 인원 고정 1
+            f.value = "1";
+            f.needsCheck = false;
+            f.source = "RULE";
         } else {
             f.reason = "MISSING";
             f.askHint = ASK.get(name);
@@ -146,8 +149,9 @@ public class ReservationField {
             return; // 그대로면 바뀜 표시 같은 이전 상태 유지
         }
         String old = value();
+        boolean oldSaid = said != null; // 기본값(목적 RESERVE, 인원 1)은 고객이 한 말이 아니라 바뀜 표시 안 함
         copy(fresh);
-        if (old != null && !old.equals(value())) previousValue = old;
+        if (old != null && oldSaid && !old.equals(value())) previousValue = old;
     }
 
     // 출발 = 도착. 상담원이 고른 쪽은 그대로

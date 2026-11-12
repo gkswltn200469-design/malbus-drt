@@ -62,14 +62,19 @@ class ExtractApiTest {
     }
 
     @Test
-    void 인원_말_안하면_빈칸() throws Exception {
+    void 인원은_추출_안하고_항상_1() throws Exception {
         extract("내일 오전 열 시에 우방에서 백화점 가요")
-                .andExpect(jsonPath("$.people.value").isEmpty())
-                .andExpect(jsonPath("$.people.needsCheck").value(true))
-                .andExpect(jsonPath("$.people.reason").value("MISSING"));
+                .andExpect(jsonPath("$.people.value").value(1))
+                .andExpect(jsonPath("$.people.said").isEmpty())
+                .andExpect(jsonPath("$.people.needsCheck").value(false))
+                .andExpect(jsonPath("$.people.reason").isEmpty())
+                .andExpect(jsonPath("$.people.source").value("RULE"))
+                .andExpect(jsonPath("$.people.evidence").isEmpty());
         extract("내일 오전 열 시에 우방에서 백화점 가요. 둘이요")
-                .andExpect(jsonPath("$.people.value").value(2))
-                .andExpect(jsonPath("$.people.needsCheck").value(false));
+                .andExpect(jsonPath("$.people.value").value(1))
+                .andExpect(jsonPath("$.people.said").isEmpty());
+        extract("내일 예약한 거 취소할게요")
+                .andExpect(jsonPath("$.people.value").value(1));
     }
 
     @Test

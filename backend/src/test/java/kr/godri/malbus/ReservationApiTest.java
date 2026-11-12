@@ -47,7 +47,6 @@ class ReservationApiTest {
         patchField(id, "to", "\"S01\"").andExpect(status().isOk());
         patchField(id, "date", "\"2026-11-18\"").andExpect(status().isOk());
         patchField(id, "time", "\"10:00\"").andExpect(status().isOk());
-        patchField(id, "people", "1").andExpect(status().isOk());
     }
 
     @Test
@@ -64,7 +63,9 @@ class ReservationApiTest {
                 .andExpect(jsonPath("$.from.needsCheck").value(true))
                 .andExpect(jsonPath("$.from.reason").value("MISSING"))
                 .andExpect(jsonPath("$.from.candidates", hasSize(0)))
-                .andExpect(jsonPath("$.people.value").isEmpty())
+                .andExpect(jsonPath("$.people.value").value(1))
+                .andExpect(jsonPath("$.people.needsCheck").value(false))
+                .andExpect(jsonPath("$.people.source").value("RULE"))
                 .andExpect(jsonPath("$.assist", hasSize(0)))
                 .andExpect(jsonPath("$.transcript", hasSize(0)));
     }
@@ -79,16 +80,16 @@ class ReservationApiTest {
     @Test
     void 상담원이_고른_칸은_AGENT() throws Exception {
         long id = create();
-        patchField(id, "people", "2")
+        patchField(id, "time", "\"10:00\"")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.reservation.people.value").value(2))
-                .andExpect(jsonPath("$.reservation.people.needsCheck").value(false))
-                .andExpect(jsonPath("$.reservation.people.reason").isEmpty())
-                .andExpect(jsonPath("$.reservation.people.source").value("AGENT"))
-                .andExpect(jsonPath("$.reservation.people.decidedAt").isNotEmpty())
+                .andExpect(jsonPath("$.reservation.time.value").value("10:00"))
+                .andExpect(jsonPath("$.reservation.time.needsCheck").value(false))
+                .andExpect(jsonPath("$.reservation.time.reason").isEmpty())
+                .andExpect(jsonPath("$.reservation.time.source").value("AGENT"))
+                .andExpect(jsonPath("$.reservation.time.decidedAt").isNotEmpty())
                 .andExpect(jsonPath("$.aliasSuggestion").isEmpty());
         mvc.perform(get("/reservations/" + id))
-                .andExpect(jsonPath("$.people.value").value(2));
+                .andExpect(jsonPath("$.time.value").value("10:00"));
     }
 
     @Test
@@ -102,15 +103,16 @@ class ReservationApiTest {
         patchField(id, "date", "\"2026-11-16\"").andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("PAST_DATE"));
         patchField(id, "date", "\"2026-11-17\"").andExpect(status().isOk());
-        patchField(id, "people", "0").andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code").value("INVALID_PEOPLE"));
+        patchField(id, "people", "2").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.message").value("인원은 이번 범위에서 고정 1"));
         patchField(id, "time", "\"25:00\"").andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
         patchField(id, "purpose", "\"BOOK\"").andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
         patchField(id, "seat", "\"1\"").andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
-        patchField(999999, "people", "1").andExpect(status().isNotFound())
+        patchField(999999, "time", "\"10:00\"").andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("NOT_FOUND"));
     }
 
@@ -120,8 +122,8 @@ class ReservationApiTest {
         patchField(id, "from", "\"S10\"");
         confirm(id).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("CONFIRM_BLOCKED"))
-                .andExpect(jsonPath("$.error.message").value("확인 필요 4칸 남음"))
-                .andExpect(jsonPath("$.error.details.fields", contains("to", "date", "time", "people")));
+                .andExpect(jsonPath("$.error.message").value("확인 필요 3칸 남음"))
+                .andExpect(jsonPath("$.error.details.fields", contains("to", "date", "time")));
     }
 
     @Test
@@ -135,7 +137,7 @@ class ReservationApiTest {
                 .andExpect(jsonPath("$.transcript[-1].speaker").value("SYSTEM"));
         confirm(id).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("ALREADY_CONFIRMED"));
-        patchField(id, "people", "3").andExpect(status().isConflict())
+        patchField(id, "time", "\"11:00\"").andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("ALREADY_CONFIRMED"));
         mvc.perform(get("/reservations?status=CONFIRMED"))
                 .andExpect(status().isOk())

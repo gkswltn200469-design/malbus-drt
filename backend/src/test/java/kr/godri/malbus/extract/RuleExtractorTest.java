@@ -36,16 +36,6 @@ class RuleExtractorTest {
     }
 
     @Test
-    void 인원() {
-        assertThat(RuleExtractor.people("혼자요", 1).value()).isEqualTo(1);
-        assertThat(RuleExtractor.people("할매하고 둘이요", 1).value()).isEqualTo(2);
-        assertThat(RuleExtractor.people("세 명이요", 1).value()).isEqualTo(3);
-        assertThat(RuleExtractor.people("두 분 갑니다", 1).value()).isEqualTo(2);
-        assertThat(RuleExtractor.people("제가 70살인데 내일 오전 아홉 시에", 1)).isNull();
-        assertThat(RuleExtractor.people("내일 오전 열 시에 우방에서 백화점 가요", 1)).isNull();
-    }
-
-    @Test
     void 출발_도착_말() {
         assertThat(RuleExtractor.places("내일 오전 아홉 시 반에 범물청구타운 앞에서 동아백화점 수성점 앞까지 갈라고요"))
                 .containsExactly("범물청구타운 앞", "동아백화점 수성점 앞");
@@ -71,7 +61,7 @@ class RuleExtractorTest {
                 line(1, "AGENT", "네, 범물동 DRT입니다"),
                 line(2, "CUSTOMER", "내일 오전 열 시에 하늘채에서 백화점 가요"),
                 line(3, "AGENT", "몇 분 타세요?")), List.of());
-        assertThat(out.people()).isNull();
+        assertThat(out.people()).isNull(); // 인원은 추출 안 함
         assertThat(out.purpose().value()).isEqualTo("RESERVE");
         assertThat(out.from().evidenceLineNo()).isEqualTo(2);
 

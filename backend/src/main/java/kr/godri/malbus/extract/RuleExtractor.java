@@ -20,6 +20,7 @@ public class RuleExtractor implements Extractor {
                     + "\\s*시(?=$|[\\s\\d반에로쯤까요부정,.?!~])\\s*(반|(\\d{1,2})\\s*분|(십|이십|삼십|사십|오십)\\s*분)?");
     private static final Pattern DATE = Pattern.compile(
             "내일\\s*모레|오늘|내일|모레|(?:(?:다음|이번)\\s*주\\s*)?[월화수목금토일]요일|다음\\s*주");
+    // 인원은 이번 범위에서 추출 안 함. "둘이" 같은 말을 장소로 잡지 않게 지우는 데만 씀
     private static final Pattern PEOPLE = Pattern.compile(
             "혼자|(둘|셋|넷)\\s*이|(\\d{1,2})\\s*명|(한|두|세|네|다섯|여섯|일곱|여덟|아홉|열)\\s*(?:명|분|사람)");
     private static final Pattern CANCEL = Pattern.compile("취소");
@@ -38,7 +39,7 @@ public class RuleExtractor implements Extractor {
     private static final Map<String, Integer> KNUM = Map.ofEntries(
             Map.entry("한", 1), Map.entry("두", 2), Map.entry("세", 3), Map.entry("네", 4), Map.entry("다섯", 5),
             Map.entry("여섯", 6), Map.entry("일곱", 7), Map.entry("여덟", 8), Map.entry("아홉", 9), Map.entry("열", 10),
-            Map.entry("열한", 11), Map.entry("열두", 12), Map.entry("둘", 2), Map.entry("셋", 3), Map.entry("넷", 4),
+            Map.entry("열한", 11), Map.entry("열두", 12),
             Map.entry("십", 10), Map.entry("이십", 20), Map.entry("삼십", 30), Map.entry("사십", 40), Map.entry("오십", 50));
 
     @Override
@@ -53,7 +54,6 @@ public class RuleExtractor implements Extractor {
         AiOutput.Place from = null, to = null;
         AiOutput.DateSaid date = null;
         AiOutput.TimeSaid time = null;
-        AiOutput.People people = null;
 
         for (TranscriptLine line : transcript) {
             if (!"CUSTOMER".equals(line.getSpeaker())) continue; // 상담원 말("몇 분 타세요?")은 안 봄
@@ -72,14 +72,11 @@ public class RuleExtractor implements Extractor {
             AiOutput.TimeSaid tm = time(t, no);
             if (tm != null) time = tm;
 
-            AiOutput.People p = people(t, no);
-            if (p != null) people = p;
-
             String[] places = places(t);
             if (places[0] != null) from = new AiOutput.Place(places[0], no, List.of(), null);
             if (places[1] != null) to = new AiOutput.Place(places[1], no, List.of(), null);
         }
-        return new AiOutput(purpose, from, to, date, time, people);
+        return new AiOutput(purpose, from, to, date, time, null);
     }
 
     private static String last(Matcher m) {
@@ -100,18 +97,6 @@ public class RuleExtractor implements Extractor {
                     : m.group(3).equals("반") ? 30
                     : m.group(4) != null ? Integer.parseInt(m.group(4)) : KNUM.get(m.group(5));
             found = new AiOutput.TimeSaid(m.group().trim(), hour, minute, meridiem, no);
-        }
-        return found;
-    }
-
-    static AiOutput.People people(String t, int no) {
-        Matcher m = PEOPLE.matcher(t);
-        AiOutput.People found = null;
-        while (m.find()) {
-            int n = m.group().equals("혼자") ? 1
-                    : m.group(1) != null ? KNUM.get(m.group(1))
-                    : m.group(2) != null ? Integer.parseInt(m.group(2)) : KNUM.get(m.group(3));
-            found = new AiOutput.People(m.group().trim(), n, no);
         }
         return found;
     }
