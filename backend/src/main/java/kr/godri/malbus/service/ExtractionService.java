@@ -33,10 +33,12 @@ public class ExtractionService {
 
     private final Extractor extractor;
     private final StopService stopService;
+    private final AliasService aliasService;
 
-    public ExtractionService(Extractor extractor, StopService stopService) {
+    public ExtractionService(Extractor extractor, StopService stopService, AliasService aliasService) {
         this.extractor = extractor;
         this.stopService = stopService;
+        this.aliasService = aliasService;
     }
 
     public String mode() {
@@ -46,13 +48,14 @@ public class ExtractionService {
     // 저장 안 된 칸 6개를 돌려줌 (reservationId 없음)
     public Map<String, ReservationField> extract(String receivedAt, List<TranscriptLine> lines) {
         List<StopDto> stops = stopService.findAll();
+        List<StopMatcher.Learned> learned = aliasService.forMatching();
         AiOutput ai = extractor.extract(lines, stops);
         String src = mode().equals("LLM") ? "AI" : "RULE";
 
         Map<String, ReservationField> f = new LinkedHashMap<>();
         f.put("purpose", purpose(ai.purpose(), lines, src));
-        f.put("from", stop("from", ai.from(), lines, stops, src));
-        f.put("to", stop("to", ai.to(), lines, stops, src));
+        f.put("from", stop("from", ai.from(), lines, stops, learned, src));
+        f.put("to", stop("to", ai.to(), lines, stops, learned, src));
         f.put("date", date(ai.date(), Times.dateOf(receivedAt), lines, src));
         f.put("time", time(ai.time(), lines, src));
         f.put("people", people(ai.people(), lines, src));
@@ -90,9 +93,10 @@ public class ExtractionService {
         return blank("purpose").fill(v, text, false, null, null, text == null ? null : no, text, text == null ? null : src);
     }
 
-    private ReservationField stop(String name, AiOutput.Place p, List<TranscriptLine> lines, List<StopDto> stops, String src) {
+    private ReservationField stop(String name, AiOutput.Place p, List<TranscriptLine> lines, List<StopDto> stops,
+                                  List<StopMatcher.Learned> learned, String src) {
         if (p == null || p.said() == null || p.said().isBlank()) return blank(name);
-        StopMatcher.Result m = StopMatcher.match(p.said(), stops);
+        StopMatcher.Result m = StopMatcher.match(p.said(), stops, learned);
 
         // ai가 준 순서는 BE 후보 안에서만 반영, 목록 밖 ID는 버림
         List<StopMatcher.Candidate> all = new ArrayList<>(m.candidates());

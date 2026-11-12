@@ -43,15 +43,17 @@ public class ReservationService {
     private final TranscriptLineRepository lineRepository;
     private final StopService stopService;
     private final ExtractionService extractionService;
+    private final AliasService aliasService;
 
     public ReservationService(ReservationRepository reservationRepository, ReservationFieldRepository fieldRepository,
                               TranscriptLineRepository lineRepository, StopService stopService,
-                              ExtractionService extractionService) {
+                              ExtractionService extractionService, AliasService aliasService) {
         this.reservationRepository = reservationRepository;
         this.fieldRepository = fieldRepository;
         this.lineRepository = lineRepository;
         this.stopService = stopService;
         this.extractionService = extractionService;
+        this.aliasService = aliasService;
     }
 
     public ReservationDto create(CreateReservationRequest req) {
@@ -110,9 +112,12 @@ public class ReservationService {
         Map<String, ReservationField> fields = fields(id);
         String value = validate(r, fields, name, req == null ? null : req.value());
         String now = Times.now();
-        fields.get(name).decideByAgent(value, req.note(), now);
+        ReservationField field = fields.get(name);
+        field.decideByAgent(value, req.note(), now);
         r.touch(now);
-        return new PatchFieldResponse(toDto(r, fields), null);
+        // 출발·도착에서 고객 말이 그 정류장 이름·별칭에 없으면 별칭 추가 모달용 제안
+        PatchFieldResponse.AliasSuggestion suggestion = field.isStop() ? aliasService.suggest(field.said(), value) : null;
+        return new PatchFieldResponse(toDto(r, fields), suggestion);
     }
 
     public ReservationDto confirm(Long id, ConfirmRequest req) {

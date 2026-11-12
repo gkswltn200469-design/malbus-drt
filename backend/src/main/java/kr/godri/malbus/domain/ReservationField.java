@@ -91,6 +91,10 @@ public class ReservationField {
         return needsCheck;
     }
 
+    public String said() {
+        return said;
+    }
+
     // 상담원이 고르거나 고친 값
     public void decideByAgent(String newValue, String note, String now) {
         if (isStop()) stopId = newValue;
