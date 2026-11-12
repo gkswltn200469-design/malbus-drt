@@ -28,6 +28,7 @@ JDK 21 이상이 필요합니다. 따로 설치할 DB는 없습니다.
 cd backend
 ./gradlew bootRun   # http://localhost:8080
 ./gradlew test
+./gradlew grade     # 대본 20개 채점 → test/채점결과_RULE.md
 ```
 
 - 처음 실행하면 `data/malbus.db`가 생기고 `data/정류장.csv`의 정류장이 들어갑니다. DB 파일은 저장소에 올리지 않습니다.
