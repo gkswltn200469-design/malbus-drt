@@ -29,13 +29,17 @@ cd backend
 ./gradlew bootRun   # http://localhost:8080
 ./gradlew test
 ./gradlew grade     # 대본 20개 채점 → test/채점결과_RULE.md
+./gradlew gradeLlm  # 같은 채점을 LLM 모드로 → test/채점결과_LLM.md (키 필요, API 20번 호출)
 ```
 
 - 처음 실행하면 `data/malbus.db`가 생기고 `data/정류장.csv`의 정류장이 들어갑니다. DB 파일은 저장소에 올리지 않습니다.
 - `backend` 폴더에서 실행해야 합니다. DB와 CSV 경로가 `../data` 기준입니다.
 - 스키마나 정류장 CSV를 바꿨으면 `data/malbus.db`를 지우고 다시 실행합니다.
 - 확인: `curl localhost:8080/health` → `{"status":"ok","mode":"RULE","stops":17}`
-- LLM 키는 환경 변수 `ANTHROPIC_API_KEY`로만 넣습니다. 키가 없으면 규칙 모드(`mode: RULE`)로 동작합니다. LLM 추출기는 아직 붙지 않아서 지금은 키가 있어도 규칙 모드입니다.
+- LLM 키는 환경 변수 `ANTHROPIC_API_KEY`로만 넣습니다. 키가 있으면 LLM 모드(`mode: LLM`, Claude Sonnet 5.5), 없으면 규칙 모드(`mode: RULE`)로 동작합니다.
+- LLM 모드에서 호출이 실패하면 그 요청은 규칙 추출로 대신하고 서버 로그에 경고를 남깁니다. 끄려면 `malbus.llm.fallback-to-rule=false`.
+- 프롬프트는 `backend/src/main/resources/llm/system-prompt.md`에 있습니다. 채점용 대본 20개는 프롬프트에 넣지 않습니다.
+- `./gradlew test`는 키가 있어도 규칙 모드로 돌아서 API를 부르지 않습니다.
 
 ## 참고용 시제품 실행
 
