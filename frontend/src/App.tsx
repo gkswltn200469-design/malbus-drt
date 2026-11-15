@@ -1,7 +1,17 @@
+import { Header } from '@/components/Header'
+import { ReservationPanel } from '@/components/ReservationPanel'
+import { TranscriptPanel } from '@/components/TranscriptPanel'
+
 function App() {
   return (
-    <main className="flex min-h-screen items-center justify-center">
-      <h1 className="text-2xl font-bold">말로 부르는 버스 · 상담원 보조</h1>
+    <main className="min-h-screen bg-slate-100 p-4">
+      <div className="mx-auto flex h-[calc(100vh-2rem)] max-w-6xl flex-col gap-4">
+        <Header />
+        <div className="grid flex-1 grid-cols-1 gap-4 overflow-hidden md:grid-cols-2">
+          <TranscriptPanel />
+          <ReservationPanel />
+        </div>
+      </div>
     </main>
   )
 }
