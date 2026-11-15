@@ -16,8 +16,26 @@
 |---|---|
 | `prototype/` | 기획 단계에서 만든 **참고용 시제품** (규칙 기반, 평창 예시 정류장). 개발 구조를 그대로 따를 필요는 없습니다 |
 | `docs/` | 제출한 「AI를 활용한 공공서비스 직접개발 계획서」 |
+| `backend/` | 예약 API 서버 (Spring Boot, SQLite). API 형식은 `docs/api.md` |
 
 개발 코드의 폴더 구조는 개발자 회의에서 정한 뒤 여기에 적습니다.
+
+## 백엔드 실행
+
+JDK 21 이상이 필요합니다. 따로 설치할 DB는 없습니다.
+
+```sh
+cd backend
+./gradlew bootRun   # http://localhost:8080
+./gradlew test
+./gradlew grade     # 대본 20개 채점 → test/채점결과_RULE.md
+```
+
+- 처음 실행하면 `data/malbus.db`가 생기고 `data/정류장.csv`의 정류장이 들어갑니다. DB 파일은 저장소에 올리지 않습니다.
+- `backend` 폴더에서 실행해야 합니다. DB와 CSV 경로가 `../data` 기준입니다.
+- 스키마나 정류장 CSV를 바꿨으면 `data/malbus.db`를 지우고 다시 실행합니다.
+- 확인: `curl localhost:8080/health` → `{"status":"ok","mode":"RULE","stops":17}`
+- LLM 키는 환경 변수 `ANTHROPIC_API_KEY`로만 넣습니다. 키가 없으면 규칙 모드(`mode: RULE`)로 동작합니다. LLM 추출기는 아직 붙지 않아서 지금은 키가 있어도 규칙 모드입니다.
 
 ## 참고용 시제품 실행
 

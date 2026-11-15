@@ -1,0 +1,42 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.6'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'kr.godri'
+version = '0.0.1'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.xerial:sqlite-jdbc'
+    implementation 'org.hibernate.orm:hibernate-community-dialects'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+}
+
+tasks.named('test') {
+    useJUnitPlatform { excludeTags 'grading' }
+    // 테스트용 db는 매번 새로
+    doFirst { delete fileTree('build') { include '*.db*' } }
+}
+
+// 대본 20개 채점 -> ../test/채점결과_RULE.md
+tasks.register('grade', Test) {
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'grading' }
+    outputs.upToDateWhen { false }
+    doFirst { delete fileTree('build') { include 'grading.db*' } }
+}
