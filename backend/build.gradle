@@ -16,6 +16,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.xerial:sqlite-jdbc'
     implementation 'org.hibernate.orm:hibernate-community-dialects'
+    implementation 'com.anthropic:anthropic-java:3.3.0'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
@@ -39,4 +40,21 @@ tasks.register('grade', Test) {
     useJUnitPlatform { includeTags 'grading' }
     outputs.upToDateWhen { false }
     doFirst { delete fileTree('build') { include 'grading.db*' } }
+}
+
+// 같은 채점을 LLM 모드로 -> ../test/채점결과_LLM.md. ANTHROPIC_API_KEY 필요, 실제 API 호출(대본 20번)
+tasks.register('gradeLlm', Test) {
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags 'grading' }
+    outputs.upToDateWhen { false }
+    // 키 값은 gradle에 넘기지 않고 spring이 테스트 JVM 환경 변수에서 읽게 둠
+    systemProperty 'malbus.llm.api-key', '${ANTHROPIC_API_KEY:}'
+    systemProperty 'malbus.llm.fallback-to-rule', 'false' // 실패를 규칙 결과로 덮지 않음
+    systemProperty 'grading.mode', 'LLM'
+    doFirst {
+        if (!System.getenv('ANTHROPIC_API_KEY')) throw new GradleException('ANTHROPIC_API_KEY 환경 변수가 필요함')
+        delete fileTree('build') { include 'grading.db*' }
+    }
 }

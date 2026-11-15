@@ -26,15 +26,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-// 대본 20개를 /extract(규칙 모드)에 넣고 정답지와 비교 -> test/채점결과_RULE.md
-// ./gradlew grade 로만 돌림. 배운 별칭이 섞이지 않게 db 따로 씀
+// 대본 20개를 /extract에 넣고 정답지와 비교 -> test/채점결과_{RULE|LLM}.md
+// ./gradlew grade(규칙) / ./gradlew gradeLlm(LLM) 으로만 돌림. 배운 별칭이 섞이지 않게 db 따로 씀
 @Tag("grading")
 @SpringBootTest(properties = "spring.datasource.url=jdbc:sqlite:build/grading.db?foreign_keys=on")
 @AutoConfigureMockMvc
 class ScriptGradingTest {
 
     private static final Path ANSWERS = Path.of("../test/대본_정답지.csv");
-    private static final Path RESULT = Path.of("../test/채점결과_RULE.md");
+    private static final String MODE = System.getProperty("grading.mode", "RULE");
+    private static final Path RESULT = Path.of("../test/채점결과_" + MODE + ".md");
     // 채점 칸은 5개. 정답지에 목적·인원 열이 있어도 안 봄 (목적 고정, 인원 화면 제외)
     private static final List<String> COLS = List.of("출발", "도착", "날짜", "시간", "확인필요");
     private static final List<String> KEYS = List.of("from", "to", "date", "time");
@@ -65,7 +66,7 @@ class ScriptGradingTest {
             Map<String, String> row = new LinkedHashMap<>();
             for (int i = 0; i < header.size(); i++) row.put(header.get(i).trim(), i < cells.size() ? cells.get(i).trim() : "");
             JsonNode out = extract(row);
-            assertThat(out.get("mode").asText()).isEqualTo("RULE");
+            assertThat(out.get("mode").asText()).isEqualTo(MODE);
             total++;
 
             Map<String, String> marks = new LinkedHashMap<>();
@@ -96,9 +97,12 @@ class ScriptGradingTest {
         int n = total;
 
         StringBuilder md = new StringBuilder();
-        md.append("# 채점 결과 (RULE 모드)\n\n");
-        md.append("- 대상: `test/대본_정답지.csv` 대본 ").append(total).append("개를 `POST /extract`에 넣은 결과 (규칙 모드, 배운 별칭 없음)\n");
-        md.append("- 다시 만들기: `cd backend && ./gradlew grade` (이 파일을 덮어씀)\n");
+        boolean llm = MODE.equals("LLM");
+        md.append("# 채점 결과 (").append(MODE).append(" 모드)\n\n");
+        md.append("- 대상: `test/대본_정답지.csv` 대본 ").append(total).append("개를 `POST /extract`에 넣은 결과 (")
+                .append(llm ? "LLM 모드" : "규칙 모드").append(", 배운 별칭 없음)\n");
+        md.append("- 다시 만들기: `cd backend && ./gradlew ").append(llm ? "gradeLlm" : "grade").append("` (이 파일을 덮어씀)\n");
+        if (llm) md.append("- LLM은 같은 대본도 돌릴 때마다 결과가 조금 다를 수 있음\n");
         md.append("- 채점 칸: 출발, 도착, 날짜, 시간, 확인필요. 목적('이동수단 예약' 고정)과 인원(화면 제외)은 채점하지 않음\n");
         md.append("- 판정 기준\n");
         md.append("  - 날짜·시간: `value`가 정답과 같으면 O. 정답 빈칸은 `null`이어야 O\n");
