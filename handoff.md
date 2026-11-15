@@ -19,3 +19,11 @@
 - 인원 기본값 1명(#13): 예약인데 인원 말 안 하면 `value = 1`, `said = null`, `source = RULE`. 변경·취소·문의는 null. 채점 전체 칸 135/140(96%), 인원 20/20, 확인필요 16/20
 - 채점 기준 변경(#11): 정답지 새 형식(목적·인원 열 없음, master `641d321`)에 맞춰 출발·도착·날짜·시간·확인필요 5칸만 채점, 열 이름으로 읽어서 옛 형식도 됨. 새 정답지 기준 RULE 97/100 (18번 도착, 19번 도착, 18번 확인필요 틀림)
 - 인원 화면·채점 제외(#13): 인원은 추출 안 하고 항상 `value = 1`, `needsCheck = false`, `source = RULE`, `said = null`로 저장(나중 인원 기능용으로 칸만 남김). PATCH `people`은 400, 확정 조건·`CONFIRM_BLOCKED`에서 뺌. 새 정답지 기준 RULE 97/100
+
+### 2026-11-15
+
+- 프론트 API 연결(#17): #16 상담원 화면을 백엔드에 붙임. 대본·한 줄 입력은 `POST /reservations` + `/lines`, 후보 선택·날짜·시간 수정은 `PATCH`, 확정은 `POST /confirm`, 정류장은 `GET /stops`. 확정 화면 JSON은 서버 응답 그대로(SQLite 저장)
+- 별칭 추가 모달: PATCH 응답에 `aliasSuggestion` 오면 띄우고 "추가"면 `POST /aliases`(승인 대기)
+- 서버 에러는 화면 위 빨간 줄로 표시. 인원 카드 삭제, 목적 고정
+- 화면 쪽 추출 로직(`extract.ts`, `resolveFields.ts` 등) 삭제. 추출 규칙은 백엔드에만 있음
+- 실행: `cd backend && ./gradlew bootRun`(8080) + `cd frontend && pnpm dev`(5173). 주소 바꾸려면 `VITE_API_URL`
