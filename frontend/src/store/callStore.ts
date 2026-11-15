@@ -1,20 +1,20 @@
 // 통화 보조 화면의 상태 저장소. docsui/D-1(통화 보조 화면 기본)·D-4(확정 버튼)·
-// D-5(확정 결과 화면)의 동작을 그대로 구현한다. 지금은 프론트엔드 단독 데모라서
-// 백엔드 저장 대신 메모리 + sessionStorage에만 쌓인다 (강대운 예약 API 연동 전 자리표시).
+// D-5(확정 결과 화면)의 동작을 따른다. 추출·판정·저장은 백엔드가 하고(docs/api.md),
+// 여기서는 응답을 받아 화면 상태로 바꿔 둔다.
 
 import { create } from 'zustand'
-import { STOPS } from '@/data/stops'
 import { DEMO_SCRIPTS } from '@/data/demoScripts'
-import { buildAliasIndex, extractFields } from '@/lib/extract'
 import {
-  applyExtraction,
-  checkReadyToConfirm,
-  createEmptyFields,
-  overrideDate as overrideDateField,
-  overridePeople as overridePeopleField,
-  overrideTime as overrideTimeField,
-  selectStop,
-} from '@/lib/resolveFields'
+  api,
+  ApiError,
+  toFields,
+  toServerTime,
+  toTranscript,
+  type AliasSuggestion,
+  type ApiReservation,
+  type Stop,
+} from '@/lib/api'
+import { checkReadyToConfirm, createEmptyFields } from '@/lib/fieldState'
 import type {
   ReservationFields,
   ReservationStatus,
@@ -22,7 +22,6 @@ import type {
   TranscriptLine,
 } from '@/types/reservation'
 
-const ALIAS_INDEX = buildAliasIndex(STOPS)
 const LINE_STEP_SECONDS = 4
 
 function formatElapsed(seconds: number): string {
@@ -31,173 +30,186 @@ function formatElapsed(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-function nowClock(): string {
-  const d = new Date()
+function clockOf(iso: string): string {
+  const d = new Date(iso)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 interface CallState {
-  reservationId: number
+  stops: Stop[]
+  stopById: Record<string, Stop>
+  reservationId: number | null
   agentName: string
   status: ReservationStatus
-  receivedAt: string // ISO, "내일/모레" 변환 기준
   fields: ReservationFields
   transcript: TranscriptLine[]
   callSeconds: number
   confirmModalOpen: boolean
   confirmedAt: string | null
   confirmedBy: string | null
+  /** 확정 후 서버가 돌려준 예약 그대로 (D-5 JSON 화면) */
+  saved: ApiReservation | null
+  aliasSuggestion: AliasSuggestion | null
+  error: string | null
 
+  loadStops: () => Promise<void>
   setAgentName: (name: string) => void
-  loadScript: (scriptId: number) => void
-  addManualLine: (speaker: Speaker, text: string) => void
-  selectStopCandidate: (key: 'from' | 'to', stopId: string) => void
-  overrideDate: (value: string) => void
-  overrideTime: (value: string) => void
-  overridePeople: (value: number) => void
+  loadScript: (scriptId: number) => Promise<void>
+  addManualLine: (speaker: Speaker, text: string) => Promise<void>
+  selectStopCandidate: (key: 'from' | 'to', stopId: string) => Promise<void>
+  overrideDate: (value: string) => Promise<void>
+  overrideTime: (value: string) => Promise<void>
   openConfirmModal: () => void
   closeConfirmModal: () => void
-  confirmReservation: () => void
+  confirmReservation: () => Promise<void>
+  addAlias: () => Promise<void>
+  dismissAlias: () => void
+  clearError: () => void
   nextCall: () => void
 }
 
-function rerunExtraction(
-  transcript: TranscriptLine[],
-  fields: ReservationFields,
-  receivedAtIso: string,
-): ReservationFields {
-  const customerText = transcript
-    .filter((l) => l.speaker === '고객')
-    .map((l) => l.text)
-    .join(' ')
-  const extraction = extractFields(
-    customerText,
-    new Date(receivedAtIso.replace(' ', 'T')),
-    ALIAS_INDEX,
-  )
-  return applyExtraction(
-    fields,
-    extraction,
-    new Date(receivedAtIso.replace(' ', 'T')),
-  )
-}
-
-function freshState(reservationId: number, agentName: string) {
+function freshCall() {
   return {
-    reservationId,
-    agentName,
+    reservationId: null,
     status: '확정 대기' as ReservationStatus,
-    receivedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
     fields: createEmptyFields(),
     transcript: [] as TranscriptLine[],
     callSeconds: 0,
     confirmModalOpen: false,
     confirmedAt: null,
     confirmedBy: null,
+    saved: null,
+    aliasSuggestion: null,
+    error: null,
   }
 }
 
-export const useCallStore = create<CallState>((set, get) => ({
-  ...freshState(1, ''),
+// 대본 재생 중에 다른 대본이나 다음 통화를 누르면 이전 재생을 멈추는 용도
+let callToken = 0
 
-  setAgentName: (name) => set({ agentName: name }),
-
-  loadScript: (scriptId) => {
-    const script = DEMO_SCRIPTS.find((s) => s.id === scriptId)
-    if (!script) return
-    const { reservationId, agentName } = get()
+export const useCallStore = create<CallState>((set, get) => {
+  function apply(r: ApiReservation) {
+    const { stopById } = get()
+    const confirmed = r.status === 'CONFIRMED'
     set({
-      ...freshState(reservationId, agentName),
-      receivedAt: script.receivedAt,
+      reservationId: r.id,
+      status: confirmed ? '확정' : '확정 대기',
+      fields: toFields(r, (id) => stopById[id]?.name ?? id),
+      transcript: toTranscript(r, (n) => formatElapsed(n * LINE_STEP_SECONDS)),
+      callSeconds: r.transcript.length * LINE_STEP_SECONDS,
+      confirmedAt: r.confirmedAt ? clockOf(r.confirmedAt) : null,
+      confirmedBy: r.confirmedBy,
+      saved: confirmed ? r : null,
     })
-    let seconds = 0
-    for (const line of script.lines) {
-      seconds += LINE_STEP_SECONDS
-      const transcriptLine: TranscriptLine = {
-        id: crypto.randomUUID(),
-        time: formatElapsed(seconds),
-        speaker: line.speaker,
-        text: line.text,
-      }
-      set((state) => {
-        const transcript = [...state.transcript, transcriptLine]
-        const fields =
-          line.speaker === '고객'
-            ? rerunExtraction(transcript, state.fields, state.receivedAt)
-            : state.fields
-        return { transcript, fields, callSeconds: seconds }
+  }
+
+  async function guard(fn: () => Promise<void>) {
+    try {
+      set({ error: null })
+      await fn()
+    } catch (e) {
+      set({ error: e instanceof ApiError ? e.message : String(e) })
+    }
+  }
+
+  async function ensureReservation(): Promise<number> {
+    const id = get().reservationId
+    if (id !== null) return id
+    const r = await api.create()
+    apply(r)
+    return r.id
+  }
+
+  async function patch(name: string, value: string) {
+    const id = get().reservationId
+    if (id === null) return
+    await guard(async () => {
+      const res = await api.patchField(id, name, value)
+      apply(res.reservation)
+      set({ aliasSuggestion: res.aliasSuggestion })
+    })
+  }
+
+  return {
+    stops: [],
+    stopById: {},
+    agentName: '',
+    ...freshCall(),
+
+    loadStops: () =>
+      guard(async () => {
+        const stops = await api.stops()
+        set({
+          stops,
+          stopById: Object.fromEntries(stops.map((s) => [s.id, s])),
+        })
+      }),
+
+    setAgentName: (name) => set({ agentName: name }),
+
+    loadScript: async (scriptId) => {
+      const script = DEMO_SCRIPTS.find((s) => s.id === scriptId)
+      if (!script) return
+      const token = ++callToken
+      set(freshCall())
+      await guard(async () => {
+        let r = await api.create(toServerTime(script.receivedAt))
+        for (const line of script.lines) {
+          if (token !== callToken) return
+          apply(r)
+          r = await api.addLine(r.id, line.speaker, line.text)
+        }
+        if (token === callToken) apply(r)
       })
-    }
-  },
+    },
 
-  addManualLine: (speaker, text) => {
-    const trimmed = text.trim()
-    if (!trimmed) return
-    set((state) => {
-      const seconds = state.callSeconds + LINE_STEP_SECONDS
-      const line: TranscriptLine = {
-        id: crypto.randomUUID(),
-        time: formatElapsed(seconds),
-        speaker,
-        text: trimmed,
-      }
-      const transcript = [...state.transcript, line]
-      const fields =
-        speaker === '고객'
-          ? rerunExtraction(transcript, state.fields, state.receivedAt)
-          : state.fields
-      return { transcript, fields, callSeconds: seconds }
-    })
-  },
+    addManualLine: async (speaker, text) => {
+      const trimmed = text.trim()
+      if (!trimmed) return
+      await guard(async () => {
+        const id = await ensureReservation()
+        apply(await api.addLine(id, speaker, trimmed))
+      })
+    },
 
-  selectStopCandidate: (key, stopId) =>
-    set((state) => ({ fields: selectStop(state.fields, key, stopId) })),
+    selectStopCandidate: (key, stopId) => patch(key, stopId),
+    overrideDate: (value) => patch('date', value),
+    overrideTime: (value) => patch('time', value),
 
-  overrideDate: (value) =>
-    set((state) => ({
-      fields: overrideDateField(
-        state.fields,
-        value,
-        new Date(state.receivedAt.replace(' ', 'T')),
-      ),
-    })),
+    openConfirmModal: () => {
+      if (checkReadyToConfirm(get().fields).ready)
+        set({ confirmModalOpen: true })
+    },
 
-  overrideTime: (value) =>
-    set((state) => ({ fields: overrideTimeField(state.fields, value) })),
+    closeConfirmModal: () => set({ confirmModalOpen: false }),
 
-  overridePeople: (value) =>
-    set((state) => ({ fields: overridePeopleField(state.fields, value) })),
+    confirmReservation: async () => {
+      const id = get().reservationId
+      if (id === null) return
+      const agentName = get().agentName.trim() || '상담원'
+      set({ confirmModalOpen: false })
+      await guard(async () => apply(await api.confirm(id, agentName)))
+    },
 
-  openConfirmModal: () => {
-    const { ready } = checkReadyToConfirm(get().fields)
-    if (ready) set({ confirmModalOpen: true })
-  },
+    addAlias: async () => {
+      const { aliasSuggestion, reservationId } = get()
+      if (!aliasSuggestion || reservationId === null) return
+      set({ aliasSuggestion: null })
+      await guard(async () => {
+        await api.addAlias(
+          aliasSuggestion.said,
+          aliasSuggestion.stopId,
+          reservationId,
+        )
+      })
+    },
 
-  closeConfirmModal: () => set({ confirmModalOpen: false }),
+    dismissAlias: () => set({ aliasSuggestion: null }),
+    clearError: () => set({ error: null }),
 
-  confirmReservation: () => {
-    const { ready } = checkReadyToConfirm(get().fields)
-    if (!ready) return
-    const agentName = get().agentName.trim() || '상담원'
-    const seconds = get().callSeconds + 2
-    const confirmLine: TranscriptLine = {
-      id: crypto.randomUUID(),
-      time: formatElapsed(seconds),
-      speaker: '기록',
-      text: `예약 #${get().reservationId} 확정 · 상담원 ${agentName}`,
-    }
-    set((state) => ({
-      status: '확정',
-      confirmModalOpen: false,
-      confirmedAt: nowClock(),
-      confirmedBy: agentName,
-      transcript: [...state.transcript, confirmLine],
-      callSeconds: seconds,
-    }))
-  },
-
-  nextCall: () => {
-    const { reservationId, agentName } = get()
-    set(freshState(reservationId + 1, agentName))
-  },
-}))
+    nextCall: () => {
+      callToken++
+      set(freshCall())
+    },
+  }
+})

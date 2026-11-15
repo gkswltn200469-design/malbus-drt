@@ -21,7 +21,7 @@ export function Header() {
         <span className="text-lg">🚌</span>
         <h1 className="font-bold">말로 부르는 버스 · 상담원 보조</h1>
         <span className="rounded-full bg-white/10 px-2 py-1 text-xs">
-          예약 #{reservationId} · 상담원 통화
+          예약 #{reservationId ?? '-'} · 상담원 통화
         </span>
         <span className="rounded-full bg-white/10 px-2 py-1 text-xs">
           상태: {status}

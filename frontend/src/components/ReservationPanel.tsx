@@ -1,13 +1,13 @@
 // 오른쪽 패널 · 예약 접수 및 확정. docsui/D-1(양식)·D-4(확정 버튼)의 규칙을 따른다:
 // 확인 필요·빈칸이 하나라도 남으면 확정 버튼이 눌리지 않는다.
+import { AliasModal } from '@/components/AliasModal'
 import { ConfirmedCard } from '@/components/ConfirmedCard'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { DateFieldCard } from '@/components/DateFieldCard'
 import { FieldShell } from '@/components/FieldShell'
-import { PeopleFieldCard } from '@/components/PeopleFieldCard'
 import { StopFieldCard } from '@/components/StopFieldCard'
 import { TimeFieldCard } from '@/components/TimeFieldCard'
-import { checkReadyToConfirm, remainingFieldLabels } from '@/lib/resolveFields'
+import { checkReadyToConfirm, remainingFieldLabels } from '@/lib/fieldState'
 import { useCallStore } from '@/store/callStore'
 
 export function ReservationPanel() {
@@ -39,7 +39,6 @@ export function ReservationPanel() {
         <StopFieldCard label="도착 정류장" fieldKey="to" />
         <DateFieldCard />
         <TimeFieldCard />
-        <PeopleFieldCard />
       </div>
 
       <div className="flex items-center justify-between border-t border-slate-200 p-3">
@@ -64,6 +63,7 @@ export function ReservationPanel() {
       </div>
 
       <ConfirmModal />
+      <AliasModal />
     </section>
   )
 }

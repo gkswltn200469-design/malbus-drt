@@ -1,7 +1,5 @@
 // 확정 결과 화면. docsui/D-5(확정 결과 화면): 양식 자리가 예약 카드로 바뀌고,
-// 저장된 JSON을 그대로 보여 준다. 배차 시스템 전달은 확장 과제라 지금은 화면·파일로만 남는다.
-import { STOP_BY_ID } from '@/data/stops'
-import { buildReservationJson } from '@/lib/buildReservationJson'
+// 서버가 DB에 저장하고 돌려준 JSON을 그대로 보여 준다. 배차 시스템 전달은 확장 과제.
 import { formatKoreanDate, formatKoreanTime } from '@/lib/dateFormat'
 import { useCallStore } from '@/store/callStore'
 import { FIELD_LABEL, type RequiredFieldKey } from '@/types/reservation'
@@ -9,22 +7,15 @@ import { FIELD_LABEL, type RequiredFieldKey } from '@/types/reservation'
 export function ConfirmedCard() {
   const reservationId = useCallStore((s) => s.reservationId)
   const fields = useCallStore((s) => s.fields)
-  const transcript = useCallStore((s) => s.transcript)
-  const status = useCallStore((s) => s.status)
+  const saved = useCallStore((s) => s.saved)
+  const stopById = useCallStore((s) => s.stopById)
   const confirmedAt = useCallStore((s) => s.confirmedAt)
   const confirmedBy = useCallStore((s) => s.confirmedBy)
   const nextCall = useCallStore((s) => s.nextCall)
 
   const agentPicked: RequiredFieldKey[] = (
-    ['from', 'to', 'date', 'time', 'people'] as const
+    ['from', 'to', 'date', 'time'] as const
   ).filter((k) => fields[k].resolvedBy === 'agent')
-
-  const json = buildReservationJson({
-    id: reservationId,
-    status,
-    fields,
-    transcript,
-  })
 
   return (
     <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-white">
@@ -46,19 +37,13 @@ export function ConfirmedCard() {
             <p className="text-xs text-slate-500">출발</p>
             <p className="font-semibold text-slate-900">
               {fields.from.id &&
-                (STOP_BY_ID[fields.from.id]?.name ?? fields.from.id)}
+                (stopById[fields.from.id]?.name ?? fields.from.id)}
             </p>
           </div>
           <div>
             <p className="text-xs text-slate-500">도착</p>
             <p className="font-semibold text-slate-900">
-              {fields.to.id && (STOP_BY_ID[fields.to.id]?.name ?? fields.to.id)}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500">인원</p>
-            <p className="font-semibold text-slate-900">
-              {fields.people.value}명
+              {fields.to.id && (stopById[fields.to.id]?.name ?? fields.to.id)}
             </p>
           </div>
           <div>
@@ -76,10 +61,10 @@ export function ConfirmedCard() {
 
         <div>
           <p className="text-xs text-slate-500">
-            ✓ 저장됨 · reservations/{reservationId}.json · {confirmedAt}
+            ✓ DB 저장됨 · 예약 #{reservationId} · {confirmedAt}
           </p>
           <pre className="mt-1 max-h-64 overflow-auto rounded-lg bg-slate-900 p-3 text-xs text-slate-100">
-            {JSON.stringify(json, null, 2)}
+            {JSON.stringify(saved, null, 2)}
           </pre>
         </div>
       </div>
@@ -89,7 +74,7 @@ export function ConfirmedCard() {
           <button
             type="button"
             className="rounded border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-600"
-            title="배차 시스템 전달은 확장 과제 · 지금은 화면과 파일로 저장"
+            title="확정된 예약은 수정할 수 없음 · 배차 시스템 전달은 확장 과제"
           >
             수정
           </button>
