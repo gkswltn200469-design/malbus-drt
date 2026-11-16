@@ -1,6 +1,5 @@
 package kr.godri.malbus.extract;
 
-import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import kr.godri.malbus.domain.TranscriptLine;
 import kr.godri.malbus.dto.StopDto;
 import org.junit.jupiter.api.Test;
@@ -10,7 +9,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-// API 호출 없이 프롬프트 만들기·응답 해석만 확인
+// API 호출 없이 프롬프트 만들기·응답 해석·실패 시 규칙 대체만 확인
 class LlmExtractorTest {
 
     private static final List<StopDto> STOPS = List.of(
@@ -21,9 +20,14 @@ class LlmExtractorTest {
             new TranscriptLine(null, 1, null, "AGENT", "네, 범물동 DRT입니다"),
             new TranscriptLine(null, 2, null, "CUSTOMER", "내일 오후 한 시에 하늘채에서 용지역 가요"));
 
-    // 호출 안 하는 테스트라 가짜 키
-    private final LlmExtractor llm = new LlmExtractor(
-            AnthropicOkHttpClient.builder().apiKey("test").build(), "claude-sonnet-5-5", null);
+    private static LlmClient answering(String json) {
+        return new LlmClient() {
+            public String name() { return "fake"; }
+            public String complete(String system, String user) { return json; }
+        };
+    }
+
+    private final LlmExtractor llm = new LlmExtractor(answering("{}"), null);
 
     @Test
     void 프롬프트에_정류장_목록이_들어감() {
@@ -42,13 +46,13 @@ class LlmExtractorTest {
 
     @Test
     void 응답_해석() {
-        AiOutput out = llm.parse("""
+        AiOutput out = new LlmExtractor(answering("""
                 {"purpose":{"value":"RESERVE","evidenceLineNo":2},
                  "from":{"said":"하늘채","evidenceLineNo":2,"rankedStopIds":["S09"],"askHint":null},
                  "to":{"said":"용지역","evidenceLineNo":2,"rankedStopIds":["S12","S01","S99"],"askHint":"앞인지 건너인지"},
                  "date":{"said":"내일","evidenceLineNo":2},
                  "time":{"said":"오후 한 시","hour":1,"minute":0,"meridiem":"PM","evidenceLineNo":2}}
-                """, LINES, STOPS);
+                """), null).extract(LINES, STOPS);
 
         assertThat(out.purpose().value()).isEqualTo("RESERVE");
         assertThat(out.from().said()).isEqualTo("하늘채");
@@ -81,16 +85,17 @@ class LlmExtractorTest {
 
     @Test
     void JSON이_아니면_실패() {
-        assertThatThrownBy(() -> llm.parse("죄송합니다", LINES, STOPS)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new LlmExtractor(answering("죄송합니다"), null).extract(LINES, STOPS))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
     void 호출_실패하면_규칙_추출로_대신함() {
-        // 연결 안 되는 주소라 바로 실패 -> RuleExtractor 결과
-        LlmExtractor withFallback = new LlmExtractor(
-                AnthropicOkHttpClient.builder().apiKey("test").baseUrl("http://127.0.0.1:9").maxRetries(0).build(),
-                "claude-sonnet-5-5", new RuleExtractor());
-        AiOutput out = withFallback.extract(LINES, STOPS);
+        LlmClient broken = new LlmClient() {
+            public String name() { return "broken"; }
+            public String complete(String system, String user) { throw new IllegalStateException("429"); }
+        };
+        AiOutput out = new LlmExtractor(broken, new RuleExtractor()).extract(LINES, STOPS);
         assertThat(out.from().said()).isEqualTo("하늘채");
         assertThat(out.to().said()).isEqualTo("용지역");
     }
