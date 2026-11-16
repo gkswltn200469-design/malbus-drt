@@ -42,7 +42,7 @@ tasks.register('grade', Test) {
     doFirst { delete fileTree('build') { include 'grading.db*' } }
 }
 
-// 같은 채점을 LLM 모드로 -> ../test/채점결과_LLM.md. ANTHROPIC_API_KEY 필요, 실제 API 호출(대본 20번)
+// 같은 채점을 LLM 모드로 -> ../test/채점결과_LLM.md. GEMINI_API_KEY(또는 ANTHROPIC_API_KEY) 필요, 실제 API 호출(대본 20번)
 tasks.register('gradeLlm', Test) {
     group = 'verification'
     testClassesDirs = sourceSets.test.output.classesDirs
@@ -50,11 +50,19 @@ tasks.register('gradeLlm', Test) {
     useJUnitPlatform { includeTags 'grading' }
     outputs.upToDateWhen { false }
     // 키 값은 gradle에 넘기지 않고 spring이 테스트 JVM 환경 변수에서 읽게 둠
-    systemProperty 'malbus.llm.api-key', '${ANTHROPIC_API_KEY:}'
+    systemProperty 'malbus.llm.gemini.api-key', '${GEMINI_API_KEY:}'
+    systemProperty 'malbus.llm.claude.api-key', '${ANTHROPIC_API_KEY:}'
     systemProperty 'malbus.llm.fallback-to-rule', 'false' // 실패를 규칙 결과로 덮지 않음
     systemProperty 'grading.mode', 'LLM'
+    systemProperty 'grading.delay-ms', '7000' // 무료 등급 분당 호출 제한 때문에 대본 사이 쉼 (20개 약 2~3분)
     doFirst {
-        if (!System.getenv('ANTHROPIC_API_KEY')) throw new GradleException('ANTHROPIC_API_KEY 환경 변수가 필요함')
+        def dotenv = file('../.env')
+        def hasKey = { String k ->
+            System.getenv(k) || (dotenv.exists() && dotenv.readLines('UTF-8').any { it.trim() ==~ /${k}\s*=\s*\S+/ })
+        }
+        if (!hasKey('GEMINI_API_KEY') && !hasKey('ANTHROPIC_API_KEY')) {
+            throw new GradleException('GEMINI_API_KEY 또는 ANTHROPIC_API_KEY가 필요함 (환경 변수나 저장소 루트 .env)')
+        }
         delete fileTree('build') { include 'grading.db*' }
     }
 }

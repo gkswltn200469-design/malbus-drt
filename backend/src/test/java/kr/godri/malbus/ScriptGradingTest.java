@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.env.Environment;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -36,6 +37,7 @@ class ScriptGradingTest {
     private static final Path ANSWERS = Path.of("../test/대본_정답지.csv");
     private static final String MODE = System.getProperty("grading.mode", "RULE");
     private static final Path RESULT = Path.of("../test/채점결과_" + MODE + ".md");
+    private static final long DELAY_MS = Long.getLong("grading.delay-ms", 0);
     // 채점 칸은 5개. 정답지에 목적·인원 열이 있어도 안 봄 (목적 고정, 인원 화면 제외)
     private static final List<String> COLS = List.of("출발", "도착", "날짜", "시간", "확인필요");
     private static final List<String> KEYS = List.of("from", "to", "date", "time");
@@ -48,6 +50,16 @@ class ScriptGradingTest {
 
     @Autowired
     ObjectMapper om;
+
+    @Autowired
+    Environment env;
+
+    // ExtractorConfig와 같은 순서: Gemini 키가 있으면 Gemini, 아니면 Claude
+    private String llmModel() {
+        return env.getProperty("malbus.llm.gemini.api-key", "").isBlank()
+                ? env.getProperty("malbus.llm.claude.model")
+                : env.getProperty("malbus.llm.gemini.model");
+    }
 
     @Test
     void 대본_채점() throws Exception {
@@ -65,6 +77,7 @@ class ScriptGradingTest {
             List<String> cells = parse(raw);
             Map<String, String> row = new LinkedHashMap<>();
             for (int i = 0; i < header.size(); i++) row.put(header.get(i).trim(), i < cells.size() ? cells.get(i).trim() : "");
+            if (total > 0) Thread.sleep(DELAY_MS);
             JsonNode out = extract(row);
             assertThat(out.get("mode").asText()).isEqualTo(MODE);
             total++;
@@ -102,7 +115,10 @@ class ScriptGradingTest {
         md.append("- 대상: `test/대본_정답지.csv` 대본 ").append(total).append("개를 `POST /extract`에 넣은 결과 (")
                 .append(llm ? "LLM 모드" : "규칙 모드").append(", 배운 별칭 없음)\n");
         md.append("- 다시 만들기: `cd backend && ./gradlew ").append(llm ? "gradeLlm" : "grade").append("` (이 파일을 덮어씀)\n");
-        if (llm) md.append("- LLM은 같은 대본도 돌릴 때마다 결과가 조금 다를 수 있음\n");
+        if (llm) {
+            md.append("- 모델: `").append(llmModel()).append("`\n");
+            md.append("- LLM은 같은 대본도 돌릴 때마다 결과가 조금 다를 수 있음\n");
+        }
         md.append("- 채점 칸: 출발, 도착, 날짜, 시간, 확인필요. 목적('이동수단 예약' 고정)과 인원(화면 제외)은 채점하지 않음\n");
         md.append("- 판정 기준\n");
         md.append("  - 날짜·시간: `value`가 정답과 같으면 O. 정답 빈칸은 `null`이어야 O\n");
