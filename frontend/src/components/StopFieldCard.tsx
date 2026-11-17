@@ -1,10 +1,10 @@
 // 출발·도착 정류장 칸. docsui/D-3(정류장 고르기)의 규칙을 따른다:
 // 정류장은 목록 안에서만 고르고, 고르는 사람은 언제나 상담원이다. 타이핑으로 넣지 않는다.
 import { useState } from 'react'
-import { STOP_BY_ID, STOPS } from '@/data/stops'
 import { FieldShell } from '@/components/FieldShell'
 import { fieldState } from '@/lib/fieldState'
 import { useCallStore } from '@/store/callStore'
+import type { Stop } from '@/lib/api'
 import type { StopField } from '@/types/reservation'
 
 const QUESTION_BY_REASON: Record<string, string> = {
@@ -24,6 +24,8 @@ export function StopFieldCard({
 }) {
   const field = useCallStore((s) => s.fields[fieldKey])
   const selectStopCandidate = useCallStore((s) => s.selectStopCandidate)
+  const stops = useCallStore((s) => s.stops)
+  const stopById = useCallStore((s) => s.stopById)
   const [searchOpen, setSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -32,14 +34,16 @@ export function StopFieldCard({
     field.needsCheck,
     field.resolvedBy,
   )
-  const display = renderValue(field)
+  const display = renderValue(field, stopById)
 
   const searchResults = query.trim()
-    ? STOPS.filter(
-        (s) =>
-          s.name.includes(query.trim()) ||
-          s.alias.some((a) => a.includes(query.trim())),
-      ).slice(0, 8)
+    ? stops
+        .filter(
+          (s) =>
+            s.name.includes(query.trim()) ||
+            s.aliases.some((a) => a.includes(query.trim())),
+        )
+        .slice(0, 8)
     : []
 
   return (
@@ -53,7 +57,7 @@ export function StopFieldCard({
       {field.needsCheck && (
         <div className="mt-2 space-y-1 border-t border-[#E39A2D]/40 pt-2">
           {field.candidates.map((id) => {
-            const stop = STOP_BY_ID[id]
+            const stop = stopById[id]
             return (
               <label
                 key={id}
@@ -116,7 +120,7 @@ export function StopFieldCard({
                 ))}
                 {query.trim() && searchResults.length === 0 && (
                   <li className="px-2 py-1 text-sm text-slate-400">
-                    목록 20곳 안에 없습니다.
+                    정류장 목록에 없습니다.
                   </li>
                 )}
               </ul>
@@ -132,8 +136,8 @@ export function StopFieldCard({
   )
 }
 
-function renderValue(field: StopField) {
-  if (field.id) return STOP_BY_ID[field.id]?.name ?? field.id
+function renderValue(field: StopField, stopById: Record<string, Stop>) {
+  if (field.id) return stopById[field.id]?.name ?? field.id
   if (field.said) return `${field.said} ?`
   return '아직 못 들음'
 }

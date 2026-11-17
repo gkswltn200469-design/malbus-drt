@@ -24,7 +24,7 @@ export type NeedsCheckReason =
   | 'missing' // 누락
   | 'ambiguous' // 모호 (후보 여럿·넓은 표현)
   | 'notFound' // 목록에 없음
-  | 'conflict' // 충돌·비정상 (출발=도착, 인원 0명 등)
+  | 'conflict' // 충돌·비정상 (출발=도착 등)
   | 'changed' // 통화 도중 고객이 말을 바꿈 (docs/기능규칙.md 7.3, docsui D-4)
   | null
 
@@ -65,7 +65,6 @@ export interface ReservationFields {
   to: StopField
   date: SimpleField<string> // YYYY-MM-DD
   time: SimpleField<string> // HH:MM, 24시간제
-  people: SimpleField<number>
 }
 
 export type ReservationStatus = '확정 대기' | '확정'
@@ -81,13 +80,7 @@ export interface ReservationRecord {
   confirmedBy: string | null
 }
 
-export const REQUIRED_FIELD_KEYS = [
-  'from',
-  'to',
-  'date',
-  'time',
-  'people',
-] as const
+export const REQUIRED_FIELD_KEYS = ['from', 'to', 'date', 'time'] as const
 export type RequiredFieldKey = (typeof REQUIRED_FIELD_KEYS)[number]
 
 export const FIELD_LABEL: Record<RequiredFieldKey, string> = {
@@ -95,5 +88,4 @@ export const FIELD_LABEL: Record<RequiredFieldKey, string> = {
   to: '도착 정류장',
   date: '날짜',
   time: '시간',
-  people: '인원',
 }
